@@ -1,5 +1,6 @@
 import { createDb, generateInviteToken, hashInviteToken, schema } from "@plumas/db";
-import { eq } from "drizzle-orm";
+import { verifyPassword } from "better-auth/crypto";
+import { and, eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import {
@@ -13,7 +14,7 @@ import {
   validateInviteToken,
 } from "./invite-service";
 
-const { invites, users } = schema;
+const { accounts, invites, users } = schema;
 
 function mustGetEnv(name: string): string {
   const value = process.env[name];
@@ -99,9 +100,9 @@ describe("invite-service (integration, against the real local Postgres)", () => 
     expect(revoked.revokedAt).not.toBeNull();
 
     await expect(validateInviteToken(db, token)).rejects.toThrow(InviteInvalidError);
-    await expect(acceptInvite(db, { token, displayName: "Nope", isAdult: true })).rejects.toThrow(
-      InviteInvalidError,
-    );
+    await expect(
+      acceptInvite(db, { token, displayName: "Nope", password: "correct-horse", isAdult: true }),
+    ).rejects.toThrow(InviteInvalidError);
   });
 
   it("another member can't revoke someone else's invite", async () => {
@@ -158,7 +159,12 @@ describe("invite-service (integration, against the real local Postgres)", () => 
       .set({ tokenHash: hashInviteToken(token) })
       .where(eq(invites.id, invite.id));
 
-    const user = await acceptInvite(db, { token, displayName: "Jordan L.", isAdult: true });
+    const user = await acceptInvite(db, {
+      token,
+      displayName: "Jordan L.",
+      password: "correct-horse-battery",
+      isAdult: true,
+    });
 
     expect(user.email).toBe(email);
     expect(user.invitedBy).toBe(inviter.id);
@@ -168,9 +174,25 @@ describe("invite-service (integration, against the real local Postgres)", () => 
     const [updatedInvite] = await db.select().from(invites).where(eq(invites.id, invite.id));
     expect(updatedInvite?.acceptedAt).not.toBeNull();
 
+    // A matching credential account was created the same way Better Auth's own sign-up does,
+    // so /sign-in/email can verify against it later.
+    const [account] = await db
+      .select()
+      .from(accounts)
+      .where(and(eq(accounts.userId, user.id), eq(accounts.providerId, "credential")));
+    if (!account?.password) throw new Error("expected a credential account with a password");
+    await expect(
+      verifyPassword({ hash: account.password, password: "correct-horse-battery" }),
+    ).resolves.toBe(true);
+
     // The token is single-use - a second attempt must fail.
     await expect(
-      acceptInvite(db, { token, displayName: "Someone else", isAdult: true }),
+      acceptInvite(db, {
+        token,
+        displayName: "Someone else",
+        password: "correct-horse-battery",
+        isAdult: true,
+      }),
     ).rejects.toThrow(InviteInvalidError);
   });
 
@@ -187,7 +209,12 @@ describe("invite-service (integration, against the real local Postgres)", () => 
       .where(eq(invites.id, invite.id));
 
     await expect(
-      acceptInvite(db, { token, displayName: "Too Young", isAdult: false }),
+      acceptInvite(db, {
+        token,
+        displayName: "Too Young",
+        password: "correct-horse-battery",
+        isAdult: false,
+      }),
     ).rejects.toThrow(InviteInvalidError);
   });
 });

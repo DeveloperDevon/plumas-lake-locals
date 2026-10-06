@@ -1,5 +1,6 @@
 import { z } from "zod";
 
+import { passwordSchema } from "./auth";
 import { emailSchema } from "./common";
 import { displayNameSchema } from "./user";
 
@@ -23,6 +24,7 @@ export const inviteTokenSchema = z.string().min(32).max(128);
 export const inviteAcceptSchema = z.object({
   token: inviteTokenSchema,
   displayName: displayNameSchema,
+  password: passwordSchema,
   isAdult: z.boolean().refine((value) => value, {
     message: "You must confirm you are 18 or older",
   }),

@@ -19,16 +19,17 @@ export const checkInviteToken = createServerFn({ method: "GET" })
   });
 
 /**
- * Creates the member row (FR-INV-03/04/11), then sends a magic link so they finish signing in
- * - acceptInvite itself never signs anyone in, since that call needs real request headers.
+ * Creates the member row and its password credential (FR-INV-03/04/11), then signs them in
+ * with that same password - acceptInvite itself never signs anyone in, since that call needs
+ * real request headers.
  */
-export const acceptInviteAndSendMagicLink = createServerFn({ method: "POST" })
+export const acceptInviteAndSignIn = createServerFn({ method: "POST" })
   .validator(inviteAcceptSchema)
   .handler(async ({ data }) => {
     try {
       const user = await acceptInvite(getDb(), data);
-      await createAuth().api.signInMagicLink({
-        body: { email: user.email, callbackURL: "/home" },
+      await createAuth().api.signInEmail({
+        body: { email: user.email, password: data.password },
         headers: getRequest().headers,
       });
       return { ok: true as const };

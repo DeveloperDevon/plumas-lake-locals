@@ -60,6 +60,15 @@ export function createAuth() {
       window: 60,
       max: 10,
     },
+    emailAndPassword: {
+      enabled: true,
+      // Same defense-in-depth posture as magicLink below: sign-in is public, but account
+      // creation is not - invite-service.ts's acceptInvite is still the only path that
+      // creates a user (and now, its credential account), by hashing the password with this
+      // same emailAndPassword config and inserting directly instead of going through
+      // Better Auth's own (gated) /sign-up/email endpoint.
+      disableSignUp: true,
+    },
     plugins: [
       magicLink({
         expiresIn: 60 * 15,

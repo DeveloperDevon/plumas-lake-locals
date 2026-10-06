@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-import { logCheckpoint, waitForInviteLink, waitForMagicLink } from "../helpers/mail";
+import { logCheckpoint, waitForInviteLink } from "../helpers/mail";
 import { seedMember, uniqueEmail } from "../helpers/seed";
 import { signInAsExisting } from "../helpers/ui";
 import { waitForHydration } from "../helpers/wait-for-hydration";
@@ -29,14 +29,11 @@ test("a neighbor accepts an invite, creates an account, and signs in", async ({
   ).toBeVisible();
 
   await neighborPage.getByLabel("Display name").fill("Jordan L.");
+  await neighborPage.getByLabel("Password", { exact: true }).fill("correct-horse-battery");
+  await neighborPage.getByLabel("Confirm password").fill("correct-horse-battery");
   await neighborPage.getByLabel("I am 18 or older").check();
 
-  const afterSubmitCheckpoint = logCheckpoint();
   await neighborPage.getByRole("button", { name: "Create account" }).click();
-  await expect(neighborPage.getByRole("heading", { name: "Check your email" })).toBeVisible();
-
-  const magicLink = await waitForMagicLink(afterSubmitCheckpoint);
-  await neighborPage.goto(magicLink);
 
   await expect(neighborPage).toHaveURL(/\/home$/);
   await expect(neighborPage.getByRole("heading", { name: "Welcome, Jordan L." })).toBeVisible();
@@ -60,9 +57,11 @@ test("a second attempt to use the same invite token fails", async ({ page, brows
   await neighborPage.goto(inviteUrl);
   await waitForHydration(neighborPage);
   await neighborPage.getByLabel("Display name").fill("First Try");
+  await neighborPage.getByLabel("Password", { exact: true }).fill("correct-horse-battery");
+  await neighborPage.getByLabel("Confirm password").fill("correct-horse-battery");
   await neighborPage.getByLabel("I am 18 or older").check();
   await neighborPage.getByRole("button", { name: "Create account" }).click();
-  await expect(neighborPage.getByRole("heading", { name: "Check your email" })).toBeVisible();
+  await expect(neighborPage).toHaveURL(/\/home$/);
 
   // Reload the same accept URL - the invite is already accepted, so it must now be rejected.
   await neighborPage.goto(inviteUrl);

@@ -10,7 +10,7 @@ export async function signInAsExisting(page: Page, email: string): Promise<void>
   await page.getByLabel("Email").fill(email);
 
   const checkpoint = logCheckpoint();
-  await page.getByRole("button", { name: "Send sign-in link" }).click();
+  await page.getByRole("button", { name: "Email me a sign-in link instead" }).click();
   await expect(page.getByText(/sign-in link is on its way/i)).toBeVisible();
 
   const magicLink = await waitForMagicLink(checkpoint);

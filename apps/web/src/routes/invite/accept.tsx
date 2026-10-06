@@ -9,11 +9,11 @@ import {
   Input,
   Label,
 } from "@plumas/ui";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 
-import { acceptInviteAndSendMagicLink, checkInviteToken } from "../../server/functions/invite";
+import { acceptInviteAndSignIn, checkInviteToken } from "../../server/functions/invite";
 
 export const Route = createFileRoute("/invite/accept")({
   validateSearch: (search: Record<string, unknown>) => ({
@@ -36,16 +36,18 @@ export const Route = createFileRoute("/invite/accept")({
 function AcceptInvite() {
   const { token } = Route.useSearch();
   const invite = Route.useLoaderData();
-  const acceptInvite = useServerFn(acceptInviteAndSendMagicLink);
+  const router = useRouter();
+  const acceptInvite = useServerFn(acceptInviteAndSignIn);
 
   const [displayName, setDisplayName] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [isAdult, setIsAdult] = useState(false);
   const [state, setState] = useState<
-    | { status: "idle" }
-    | { status: "submitting" }
-    | { status: "sent" }
-    | { status: "error"; message: string }
+    { status: "idle" } | { status: "submitting" } | { status: "error"; message: string }
   >({ status: "idle" });
+
+  const passwordsMatch = password.length > 0 && password === confirmPassword;
 
   if (!invite.valid || !token) {
     return (
@@ -56,21 +58,6 @@ function AcceptInvite() {
             <CardDescription>
               It may have expired, already been used, or been revoked. Ask your neighbor for a new
               invite.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      </main>
-    );
-  }
-
-  if (state.status === "sent") {
-    return (
-      <main className="mx-auto flex min-h-screen max-w-md flex-col justify-center p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Check your email</CardTitle>
-            <CardDescription>
-              We sent a sign-in link to {invite.email}. Open it to finish joining.
             </CardDescription>
           </CardHeader>
         </Card>
@@ -90,14 +77,20 @@ function AcceptInvite() {
             className="flex flex-col gap-4"
             onSubmit={(event) => {
               event.preventDefault();
+              if (!passwordsMatch) {
+                setState({ status: "error", message: "Passwords don't match." });
+                return;
+              }
               setState({ status: "submitting" });
-              void acceptInvite({ data: { token, displayName, isAdult } }).then((result) => {
-                if (result.ok) {
-                  setState({ status: "sent" });
-                } else {
-                  setState({ status: "error", message: result.message });
-                }
-              });
+              void acceptInvite({ data: { token, displayName, password, isAdult } }).then(
+                (result) => {
+                  if (result.ok) {
+                    void router.navigate({ to: "/home" });
+                  } else {
+                    setState({ status: "error", message: result.message });
+                  }
+                },
+              );
             }}
           >
             <div className="flex flex-col gap-2">
@@ -114,6 +107,34 @@ function AcceptInvite() {
                   setDisplayName(event.target.value);
                 }}
                 placeholder="Jordan L."
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="password">Password</Label>
+              <Input
+                id="password"
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                }}
+              />
+            </div>
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="confirmPassword">Confirm password</Label>
+              <Input
+                id="confirmPassword"
+                type="password"
+                required
+                minLength={8}
+                autoComplete="new-password"
+                value={confirmPassword}
+                onChange={(event) => {
+                  setConfirmPassword(event.target.value);
+                }}
               />
             </div>
             <div className="flex items-center gap-2">

@@ -18,7 +18,7 @@ describe("inviteCreateSchema", () => {
 });
 
 describe("inviteAcceptSchema", () => {
-  const base = { token: "a".repeat(43), displayName: "Jordan L." };
+  const base = { token: "a".repeat(43), displayName: "Jordan L.", password: "correct-horse" };
 
   it("accepts when the 18+ attestation is true", () => {
     expect(() => inviteAcceptSchema.parse({ ...base, isAdult: true })).not.toThrow();

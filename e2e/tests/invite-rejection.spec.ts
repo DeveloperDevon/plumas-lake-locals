@@ -29,7 +29,7 @@ test("signing in with an email no one invited never creates an account", async (
   await page.goto("/sign-in");
   await waitForHydration(page);
   await page.getByLabel("Email").fill(email);
-  await page.getByRole("button", { name: "Send sign-in link" }).click();
+  await page.getByRole("button", { name: "Email me a sign-in link instead" }).click();
   // The UI doesn't reveal whether the email had an account (FR-DM-05-style non-disclosure for
   // sign-in) - it always shows the same message.
   await expect(page.getByText(/sign-in link is on its way/i)).toBeVisible();

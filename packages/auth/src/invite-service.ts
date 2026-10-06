@@ -1,9 +1,10 @@
 import { type Database, generateInviteToken, hashInviteToken, schema } from "@plumas/db";
 import { sendInviteEmail } from "@plumas/email";
 import { DEFAULT_MEMBER_INVITE_QUOTA, INVITE_EXPIRY_DAYS } from "@plumas/validators";
+import { hashPassword } from "better-auth/crypto";
 import { and, count, desc, eq, isNull } from "drizzle-orm";
 
-const { invites, users } = schema;
+const { accounts, invites, users } = schema;
 
 export class InviteQuotaExceededError extends Error {
   constructor() {
@@ -156,6 +157,7 @@ export async function validateInviteToken(database: Database, token: string) {
 export interface AcceptInviteInput {
   token: string;
   displayName: string;
+  password: string;
   isAdult: boolean;
 }
 
@@ -163,11 +165,17 @@ export interface AcceptInviteInput {
  * FR-INV-03/04/11: the only path that creates a user row (see config.ts's databaseHooks for
  * the corresponding defense-in-depth gate on Better Auth's own create-user path). Sets
  * invitedBy from the invite and stamps the 18+ attestation; does not sign the member in —
- * the caller sends a magic link afterward, since that call needs the real request headers.
+ * the caller does that afterward, since it needs the real request headers.
+ *
+ * Also creates the matching `accounts` row for password sign-in, hashed the same way Better
+ * Auth's own /sign-up/email route does internally (providerId "credential", accountId = the
+ * user's own id) - that endpoint itself stays disabled (config.ts's
+ * emailAndPassword.disableSignUp), so this is the only path that can create one, mirroring
+ * how magic-link accounts are gated.
  */
 export async function acceptInvite(
   database: Database,
-  { token, displayName, isAdult }: AcceptInviteInput,
+  { token, displayName, password, isAdult }: AcceptInviteInput,
 ) {
   if (!isAdult) throw new InviteInvalidError("You must confirm you are 18 or older.");
 
@@ -184,6 +192,14 @@ export async function acceptInvite(
     })
     .returning();
   if (!user) throw new Error("Failed to create user");
+
+  const passwordHash = await hashPassword(password);
+  await database.insert(accounts).values({
+    userId: user.id,
+    accountId: user.id,
+    providerId: "credential",
+    password: passwordHash,
+  });
 
   await database.update(invites).set({ acceptedAt: new Date() }).where(eq(invites.id, invite.id));
 
