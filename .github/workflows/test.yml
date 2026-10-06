@@ -1,0 +1,63 @@
+name: Test
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: plumas
+          POSTGRES_PASSWORD: plumas
+          POSTGRES_DB: plumas_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      # packages/db, packages/auth, etc. run under plain Node and read these directly.
+      DATABASE_URL: postgres://plumas:plumas@localhost:5432/plumas_test
+      BETTER_AUTH_SECRET: test-secret-not-for-production-use
+      PUBLIC_APP_URL: http://localhost:3000
+      PUBLIC_APP_DOMAIN: localhost
+      EMAIL_FROM: "Plumas Lake Locals <hello@plumaslakelocals.com>"
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 12.9.1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "pnpm"
+
+      - run: pnpm install --frozen-lockfile
+
+      - run: pnpm db:migrate
+
+      - name: Run unit/integration tests (packages/db, packages/auth, ...)
+        run: pnpm turbo run test
+
+      # apps/web runs its SSR code under a simulated Cloudflare Workers runtime (workerd),
+      # which does not inherit the job's env vars - it reads a .dev.vars file instead (see
+      # apps/web/README.md). This mirrors what a developer creates locally from
+      # .dev.vars.example.
+      - name: Write apps/web/.dev.vars for the Playwright webServer
+        run: |
+          cat <<VARS > apps/web/.dev.vars
+          DATABASE_URL=${{ env.DATABASE_URL }}
+          BETTER_AUTH_SECRET=${{ env.BETTER_AUTH_SECRET }}
+          PUBLIC_APP_URL=${{ env.PUBLIC_APP_URL }}
+          PUBLIC_APP_DOMAIN=${{ env.PUBLIC_APP_DOMAIN }}
+          EMAIL_FROM=${{ env.EMAIL_FROM }}
+          VARS
+
+      - run: pnpm --filter @plumas/e2e exec playwright install --with-deps chromium
+
+      - run: pnpm --filter @plumas/e2e test:e2e
