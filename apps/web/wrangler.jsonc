@@ -1,0 +1,15 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "plumas-lake-locals-web",
+  "compatibility_date": "2026-09-02",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "@tanstack/react-start/server-entry",
+  "vars": {
+    "PUBLIC_APP_URL": "https://staging.plumaslakelocals.com",
+    "PUBLIC_APP_DOMAIN": "staging.plumaslakelocals.com"
+  }
+  // Secrets (DATABASE_URL, BETTER_AUTH_SECRET, RESEND_API_KEY) are set per environment via
+  // `wrangler secret put <NAME>`, never committed. Durable Objects / R2 bindings are added in
+  // a later phase (DMs, media uploads) - nodejs_compat is already on so that needs no
+  // architecture change here.
+}

@@ -1,0 +1,10 @@
+DATABASE_URL=postgres://plumas:plumas@localhost:5432/plumas_dev
+BETTER_AUTH_SECRET=replace-with-openssl-rand-base64-32
+PUBLIC_APP_URL=http://localhost:3000
+PUBLIC_APP_DOMAIN=localhost
+RESEND_API_KEY=
+EMAIL_FROM="Plumas Lake Locals <hello@plumaslakelocals.com>"
+GOOGLE_OAUTH_ENABLED=false
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+SENTRY_DSN=

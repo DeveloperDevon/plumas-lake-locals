@@ -30,6 +30,7 @@ top of this without schema rework.
 nvm use                                    # -> Node v24.21.0
 corepack enable && corepack prepare pnpm@12.9.1 --activate
 cp .env.example .env                       # fill in values as needed
+cp apps/web/.dev.vars.example apps/web/.dev.vars  # same values, see apps/web/README.md for why
 docker compose up -d                       # Postgres on :5432
 pnpm install
 pnpm db:migrate
