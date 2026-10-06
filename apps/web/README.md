@@ -10,6 +10,11 @@ cp .dev.vars.example .dev.vars   # fill in values (see below)
 pnpm dev                          # http://localhost:3000
 ```
 
+Or run it in Docker alongside Postgres instead — `docker compose up` from the repo root (see
+the root `README.md`). That path uses `.dev.vars.docker` (committed, `DATABASE_URL` points at
+the `postgres` service by its Compose hostname) rather than your own `.dev.vars`, bind-mounted
+over it only inside the container — see `docker-compose.yml`.
+
 ### `.dev.vars`, not `.env`
 
 This app runs its SSR code inside Cloudflare's local Workers runtime (`workerd`, via

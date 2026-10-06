@@ -1,0 +1,15 @@
+# Used only when running via `docker compose up` (bind-mounted over .dev.vars inside the web
+# container - see docker-compose.yml). DATABASE_URL points at the "postgres" service by its
+# Compose network hostname instead of localhost. Committed deliberately: this is a fixed,
+# local-only dev value, not a real secret - running `pnpm dev` directly on the host still uses
+# your own .dev.vars (localhost), untouched by this file.
+DATABASE_URL=postgres://plumas:plumas@postgres:5432/plumas_dev
+BETTER_AUTH_SECRET=docker-compose-local-dev-secret-not-for-production
+PUBLIC_APP_URL=http://localhost:3000
+PUBLIC_APP_DOMAIN=localhost
+RESEND_API_KEY=
+EMAIL_FROM="Plumas Lake Locals <hello@plumaslakelocals.com>"
+GOOGLE_OAUTH_ENABLED=false
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+SENTRY_DSN=

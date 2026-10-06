@@ -26,17 +26,33 @@ top of this without schema rework.
 
 ## Getting started
 
+Two ways to run this locally — pick one.
+
+### Option A: Node on the host, Postgres in Docker
+
 ```bash
 nvm use                                    # -> Node v24.21.0
 corepack enable && corepack prepare pnpm@12.9.1 --activate
 cp .env.example .env                       # fill in values as needed
 cp apps/web/.dev.vars.example apps/web/.dev.vars  # same values, see apps/web/README.md for why
-docker compose up -d                       # Postgres on :5432
+docker compose up -d postgres              # Postgres on :5432
 pnpm install
 pnpm db:migrate
 pnpm db:seed                               # creates an admin user, prints an invite URL
 pnpm dev                                   # apps/web on http://localhost:3000
 ```
+
+### Option B: everything in Docker
+
+```bash
+docker compose up                          # Postgres + apps/web, both on their usual ports
+```
+
+Builds `apps/web`'s image on first run (installs once; later `up`s reuse it via named
+volumes, so a `docker compose down` doesn't force a reinstall). Uses
+`apps/web/.dev.vars.docker` (committed — see `apps/web/README.md`) instead of your own
+`.dev.vars`, so the two setups don't collide; still run `pnpm db:migrate`/`pnpm db:seed`
+from the host against `localhost:5432` the first time, same as Option A.
 
 With `RESEND_API_KEY` left unset, invite and magic-link emails are logged to the console instead
 of sent, so the full invite -> signup -> sign-in loop works locally without an email provider.

@@ -10,6 +10,51 @@ services:
       - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U plumas -d plumas_dev"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    volumes:
+      - .:/app
+      # Named (not anonymous) volumes: they persist across `docker compose down`, so the
+      # dependencies installed at build time survive instead of forcing a full reinstall on
+      # the next `up`. Each reserves its path from the bind mount above, which would otherwise
+      # shadow what `pnpm install` created inside the image (host and container are different
+      # OS/arch - native deps like esbuild/sharp/lightningcss can't be shared).
+      - web_node_modules:/app/node_modules
+      - web_app_node_modules:/app/apps/web/node_modules
+      - web_config_node_modules:/app/packages/config/node_modules
+      - web_db_node_modules:/app/packages/db/node_modules
+      - web_auth_node_modules:/app/packages/auth/node_modules
+      - web_validators_node_modules:/app/packages/validators/node_modules
+      - web_ui_node_modules:/app/packages/ui/node_modules
+      - web_email_node_modules:/app/packages/email/node_modules
+      - web_crypto_node_modules:/app/packages/crypto/node_modules
+      - web_e2e_node_modules:/app/e2e/node_modules
+      # Container-only env (DATABASE_URL uses the "postgres" service hostname, not localhost);
+      # your own apps/web/.dev.vars is untouched and still used when running `pnpm dev` on the host.
+      - ./apps/web/.dev.vars.docker:/app/apps/web/.dev.vars:ro
 
 volumes:
   pg_data:
+  web_node_modules:
+  web_app_node_modules:
+  web_config_node_modules:
+  web_db_node_modules:
+  web_auth_node_modules:
+  web_validators_node_modules:
+  web_ui_node_modules:
+  web_email_node_modules:
+  web_crypto_node_modules:
+  web_e2e_node_modules:
