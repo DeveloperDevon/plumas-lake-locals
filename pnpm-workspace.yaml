@@ -4,3 +4,4 @@ packages:
   - "e2e"
 allowBuilds:
   esbuild: true
+  sharp: true
