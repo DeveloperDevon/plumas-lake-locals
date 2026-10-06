@@ -1,0 +1,7 @@
+{
+  "extends": "@plumas/config/tsconfig.node.json",
+  "compilerOptions": {
+    "jsx": "react-jsx"
+  },
+  "include": ["tests", "helpers"]
+}

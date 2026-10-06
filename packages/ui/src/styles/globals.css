@@ -1,5 +1,16 @@
 @import "tailwindcss";
 
+/*
+ * Tailwind v4's automatic content detection scans from the CSS file's own project root and
+ * does not cross into other pnpm workspace packages. Without this, every utility class used
+ * only inside this package's own components (Button, Input, Checkbox, ...) is silently
+ * missing from the generated CSS in any app that imports this stylesheet - the class names
+ * still appear in the rendered HTML (React doesn't know any better), so it looks fine until
+ * something actually measures layout. Caught by a Playwright test clicking a checkbox that
+ * had collapsed to a 0x0 bounding box because its `h-5 w-5` never made it into the CSS.
+ */
+@source "..";
+
 @theme {
   --radius-md: 0.5rem;
 }

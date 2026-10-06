@@ -1,0 +1,21 @@
+{
+  "name": "@plumas/e2e",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@plumas/auth": "workspace:*",
+    "@plumas/config": "workspace:*",
+    "@plumas/db": "workspace:*",
+    "@types/node": "^22.10.0",
+    "drizzle-orm": "^0.36.0",
+    "eslint": "^9.17.0",
+    "typescript": "^6.0.3"
+  }
+}

@@ -35,7 +35,7 @@
       "dependsOn": ["^build"]
     },
     "test:e2e": {
-      "dependsOn": ["build"]
+      "cache": false
     },
     "db:generate": {
       "cache": false
