@@ -2,7 +2,7 @@ import { createDb, generateInviteToken, hashInviteToken, schema } from "@plumas/
 import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 
-import { auth } from "./config";
+import { createAuth } from "./config";
 import { acceptInvite, createInvite } from "./invite-service";
 
 const { invites, users } = schema;
@@ -19,6 +19,9 @@ function uniqueEmail(label: string): string {
 
 describe("betterAuth config (integration, against the real local Postgres)", () => {
   const db = createDb(mustGetEnv("DATABASE_URL"));
+  // Safe to share one instance across tests under plain Node (unlike apps/web's request
+  // handlers, nothing here simulates Workers' per-request I/O isolation).
+  const auth = createAuth();
 
   beforeAll(() => {
     vi.spyOn(console, "log").mockImplementation(() => undefined);

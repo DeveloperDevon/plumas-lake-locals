@@ -1,4 +1,4 @@
-import { auth } from "@plumas/auth";
+import { createAuth } from "@plumas/auth";
 import { magicLinkRequestSchema } from "@plumas/validators";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
@@ -11,7 +11,7 @@ import { getRequest } from "@tanstack/react-start/server";
 export const requestSignInLink = createServerFn({ method: "POST" })
   .validator(magicLinkRequestSchema)
   .handler(async ({ data }) => {
-    await auth.api.signInMagicLink({
+    await createAuth().api.signInMagicLink({
       body: { email: data.email, callbackURL: "/home" },
       headers: getRequest().headers,
     });

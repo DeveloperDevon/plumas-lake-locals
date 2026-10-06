@@ -1,7 +1,7 @@
 {
   "extends": "@plumas/config/tsconfig.app.json",
   "compilerOptions": {
-    "types": ["vite/client"],
+    "types": ["vite/client", "node"],
     "allowImportingTsExtensions": true,
     "noUncheckedSideEffectImports": true
   },

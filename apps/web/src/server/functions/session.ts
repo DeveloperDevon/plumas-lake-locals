@@ -1,4 +1,4 @@
-import { auth } from "@plumas/auth";
+import { createAuth } from "@plumas/auth";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 
@@ -8,9 +8,9 @@ import { getRequest } from "@tanstack/react-start/server";
  * regardless of which context invoked them.
  */
 export const getSession = createServerFn({ method: "GET" }).handler(async () => {
-  return auth.api.getSession({ headers: getRequest().headers });
+  return createAuth().api.getSession({ headers: getRequest().headers });
 });
 
 export const signOut = createServerFn({ method: "POST" }).handler(async () => {
-  await auth.api.signOut({ headers: getRequest().headers });
+  await createAuth().api.signOut({ headers: getRequest().headers });
 });

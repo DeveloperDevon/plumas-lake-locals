@@ -44,6 +44,23 @@ Thin wrappers around `@plumas/auth`'s `invite-service` and Better Auth's `auth.a
 creates the row — because `auth.api.signInMagicLink` needs the real request headers, which the
 route layer has and a plain service function doesn't; see `src/server/functions/invite.ts`.
 
+**Always get a fresh DB connection and a fresh Better Auth instance per call** — `getDb()`
+(`src/server/db.ts`) and `createAuth()` (`@plumas/auth`), never a cached singleton. Cloudflare
+Workers can reuse the same isolate, and therefore any module-level cache, across many
+unrelated requests, but forbids touching an I/O object (a socket included) from a request
+other than the one that opened it. A cached connection works on the first request after a
+cold start and then hangs — "Cannot perform I/O on behalf of a different request" — on the
+next one, caught here by actually making two sequential real HTTP requests against the
+running dev server, not just unit tests (which run under plain Node and never hit this).
+
+**The DB driver is `postgres` (postgres.js), not `pg`.** `pg`'s wire-protocol handling hung
+specifically on `INSERT/UPDATE ... RETURNING` under Cloudflare's local Workers runtime
+(`workerd`) — plain `SELECT`s and `RETURNING`-less writes worked fine, anything with
+`RETURNING` hung until the Workers runtime killed the request. Found with a one-off
+diagnostic route while building this app; `postgres-js` doesn't have the problem and works
+identically under plain Node for `packages/db`'s migrate/seed scripts and every package's
+tests. See `packages/db/src/client.ts`.
+
 ## Security headers
 
 `src/start.ts` exports `startInstance` (the exact name `@tanstack/react-start`'s plugin looks

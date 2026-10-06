@@ -23,6 +23,16 @@ Better Auth configuration (magic link + passkey) and invite-gated signup.
   needs real request headers (`requireHeaders: true` on that endpoint), which a plain service
   function doesn't have. `acceptInvite` returns the created user; `apps/web`'s route calls
   `auth.api.signInMagicLink` afterward with the actual request's headers.
+- **`createAuth()` is a factory, not a cached singleton — call it fresh per request.** A
+  module-level `export const auth = betterAuth(...)` worked fine under plain Node (and still
+  does in this package's own tests, which share one instance across a test file) but breaks
+  under Cloudflare Workers: the same isolate — and therefore any module-level cache — can be
+  reused across many unrelated requests, and Workers forbids touching an I/O object (its DB
+  socket included) from a request other than the one that opened it. The symptom was silent:
+  the _first_ request after a cold start worked, and the _second_ one hung until the Workers
+  runtime killed it with "Cannot perform I/O on behalf of a different request." Every
+  `apps/web` route/server function calls `createAuth()` itself rather than importing a shared
+  instance.
 - **`advanced.database.generateId: "uuid"`** makes every id a real UUID (matching every other
   table's `uuid` id in this schema) instead of Better Auth's own non-uuid string generator.
   Non-obvious consequence, caught by `config.test.ts`: in this mode Better Auth omits `id`

@@ -1,8 +1,8 @@
-import { auth } from "@plumas/auth";
+import { createAuth } from "@plumas/auth";
 import { getRequest } from "@tanstack/react-start/server";
 
 export async function getSessionUser() {
-  const session = await auth.api.getSession({ headers: getRequest().headers });
+  const session = await createAuth().api.getSession({ headers: getRequest().headers });
   return session?.user ?? null;
 }
 

@@ -1,16 +1,17 @@
-import { acceptInvite, auth, InviteInvalidError, validateInviteToken } from "@plumas/auth";
-import { db } from "@plumas/db";
+import { acceptInvite, createAuth, InviteInvalidError, validateInviteToken } from "@plumas/auth";
 import { inviteAcceptSchema, inviteTokenSchema } from "@plumas/validators";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { z } from "zod";
+
+import { getDb } from "../db";
 
 /** FR-INV-03: used by /invite/accept's loader to show the locked email or a rejection. */
 export const checkInviteToken = createServerFn({ method: "GET" })
   .validator(z.object({ token: inviteTokenSchema }))
   .handler(async ({ data }) => {
     try {
-      const invite = await validateInviteToken(db(), data.token);
+      const invite = await validateInviteToken(getDb(), data.token);
       return { valid: true as const, email: invite.email };
     } catch {
       return { valid: false as const };
@@ -25,8 +26,8 @@ export const acceptInviteAndSendMagicLink = createServerFn({ method: "POST" })
   .validator(inviteAcceptSchema)
   .handler(async ({ data }) => {
     try {
-      const user = await acceptInvite(db(), data);
-      await auth.api.signInMagicLink({
+      const user = await acceptInvite(getDb(), data);
+      await createAuth().api.signInMagicLink({
         body: { email: user.email, callbackURL: "/home" },
         headers: getRequest().headers,
       });

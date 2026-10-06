@@ -1,10 +1,10 @@
-import { auth } from "@plumas/auth";
+import { createAuth } from "@plumas/auth";
 import { createFileRoute } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/api/auth/$")({
   server: {
     handlers: {
-      ANY: ({ request }) => auth.handler(request),
+      ANY: ({ request }) => createAuth().handler(request),
     },
   },
 });
