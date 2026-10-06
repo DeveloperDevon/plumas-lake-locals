@@ -1,0 +1,4 @@
+{
+  "extends": "@plumas/config/tsconfig.app.json",
+  "include": ["src"]
+}
