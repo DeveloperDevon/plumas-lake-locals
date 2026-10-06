@@ -15,6 +15,20 @@
       "when": 1791305348266,
       "tag": "0001_rls_policies",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1791309088532,
+      "tag": "0002_careful_doorman",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1791309525860,
+      "tag": "0003_watery_maddog",
+      "breakpoints": true
     }
   ]
 }

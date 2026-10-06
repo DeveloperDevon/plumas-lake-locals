@@ -1,3 +1,4 @@
+export * from "./auth-tables";
 export * from "./blocks";
 export * from "./businesses";
 export * from "./comments-reactions";
