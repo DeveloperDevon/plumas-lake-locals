@@ -1,0 +1,37 @@
+node_modules/
+.pnpm-store/
+
+# build outputs
+dist/
+.output/
+.vinxi/
+.turbo/
+*.tsbuildinfo
+
+# env
+.env
+.env.*
+!.env.example
+
+# generated
+apps/web/src/routeTree.gen.ts
+packages/*/dist/
+
+# editors / os
+.DS_Store
+.vscode/*
+!.vscode/extensions.json
+.idea/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# test artifacts
+coverage/
+playwright-report/
+test-results/
+
+# wrangler
+.wrangler/
