@@ -15,3 +15,8 @@ export const signInPasswordSchema = z.object({
   password: z.string().min(1, "Enter your password"),
 });
 export type SignInPasswordInput = z.infer<typeof signInPasswordSchema>;
+
+export const setPasswordSchema = z.object({
+  password: passwordSchema,
+});
+export type SetPasswordInput = z.infer<typeof setPasswordSchema>;

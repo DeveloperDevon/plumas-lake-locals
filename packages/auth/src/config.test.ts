@@ -96,6 +96,52 @@ describe("betterAuth config (integration, against the real local Postgres)", () 
     ).rejects.toThrow();
   });
 
+  it("sets a password for a member who was seeded without one, once signed in via magic link", async () => {
+    // Mirrors the admin bootstrap user (packages/db/src/seed/admin-invites.ts): inserted
+    // directly, so it has no credential account at all yet.
+    const email = uniqueEmail("no-password-yet");
+    const [user] = await db
+      .insert(users)
+      .values({ email, displayName: "No Password Yet" })
+      .returning();
+    if (!user) throw new Error("setup failed");
+
+    await auth.api.signInMagicLink({ body: { email }, headers: new Headers() });
+    const logSpy = vi.mocked(console.log);
+    const logged = logSpy.mock.calls.map((call) => String(call[0])).join("\n");
+    const token = /token=([A-Za-z0-9_-]+)/.exec(logged.slice(logged.lastIndexOf(email)))?.[1];
+    if (!token) throw new Error("couldn't find the magic-link token in the captured log output");
+
+    const verifyResponse = await auth.api.magicLinkVerify({
+      query: { token },
+      headers: new Headers(),
+      asResponse: true,
+    });
+    const cookie = verifyResponse.headers.get("set-cookie");
+    if (!cookie) throw new Error("sign-in didn't set a session cookie");
+    const sessionHeaders = new Headers({ cookie });
+
+    await auth.api.setPassword({
+      body: { newPassword: "a-brand-new-password" },
+      headers: sessionHeaders,
+    });
+
+    await expect(
+      auth.api.signInEmail({
+        body: { email, password: "a-brand-new-password" },
+        headers: new Headers(),
+      }),
+    ).resolves.toMatchObject({ user: { email } });
+
+    // Setting it again once one already exists is rejected, not silently overwritten.
+    await expect(
+      auth.api.setPassword({
+        body: { newPassword: "something-else" },
+        headers: sessionHeaders,
+      }),
+    ).rejects.toThrow();
+  });
+
   it("rejects account creation through Better Auth's own sign-up-with-password path", async () => {
     const email = uniqueEmail("uninvited-password");
 

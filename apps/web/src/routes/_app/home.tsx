@@ -9,10 +9,13 @@ import {
   revokeMyInvite,
   sendInvite,
 } from "../../server/functions/invites-admin";
-import { signOut } from "../../server/functions/session";
+import { getHasPassword, setPassword, signOut } from "../../server/functions/session";
 
 export const Route = createFileRoute("/_app/home")({
-  loader: async () => ({ invites: await getMyInvites() }),
+  loader: async () => ({
+    invites: await getMyInvites(),
+    hasPassword: await getHasPassword(),
+  }),
   component: Home,
 });
 
@@ -29,17 +32,24 @@ function inviteStatus(invite: {
 
 function Home() {
   const { user } = Route.useRouteContext();
-  const { invites } = Route.useLoaderData();
+  const { invites, hasPassword } = Route.useLoaderData();
   const router = useRouter();
 
   const doSignOut = useServerFn(signOut);
   const doSendInvite = useServerFn(sendInvite);
   const doRevoke = useServerFn(revokeMyInvite);
   const doResend = useServerFn(resendMyInvite);
+  const doSetPassword = useServerFn(setPassword);
 
   const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
+
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [passwordState, setPasswordState] = useState<
+    { status: "idle" } | { status: "submitting" } | { status: "error"; message: string }
+  >({ status: "idle" });
 
   async function refresh() {
     await router.invalidate();
@@ -58,6 +68,72 @@ function Home() {
           Sign out
         </Button>
       </div>
+
+      {hasPassword ? null : (
+        <Card>
+          <CardHeader>
+            <CardTitle>Set a password</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form
+              className="flex flex-col gap-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                if (newPassword !== confirmPassword) {
+                  setPasswordState({ status: "error", message: "Passwords don't match." });
+                  return;
+                }
+                setPasswordState({ status: "submitting" });
+                void doSetPassword({ data: { password: newPassword } }).then((result) => {
+                  if (result.ok) {
+                    setNewPassword("");
+                    setConfirmPassword("");
+                    setPasswordState({ status: "idle" });
+                    void refresh();
+                  } else {
+                    setPasswordState({ status: "error", message: result.message });
+                  }
+                });
+              }}
+            >
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="new-password">Password</Label>
+                <Input
+                  id="new-password"
+                  type="password"
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  value={newPassword}
+                  onChange={(event) => {
+                    setNewPassword(event.target.value);
+                  }}
+                />
+              </div>
+              <div className="flex flex-col gap-2">
+                <Label htmlFor="confirm-new-password">Confirm password</Label>
+                <Input
+                  id="confirm-new-password"
+                  type="password"
+                  required
+                  minLength={8}
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(event) => {
+                    setConfirmPassword(event.target.value);
+                  }}
+                />
+              </div>
+              {passwordState.status === "error" ? (
+                <p className="text-sm text-red-600">{passwordState.message}</p>
+              ) : null}
+              <Button type="submit" disabled={passwordState.status === "submitting"}>
+                {passwordState.status === "submitting" ? "Saving..." : "Set password"}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader>
