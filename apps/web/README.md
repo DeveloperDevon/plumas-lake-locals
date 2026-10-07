@@ -26,16 +26,24 @@ seed script, tests) — `apps/web` needs its own copy of the same values in `.de
 production, the equivalent is `wrangler secret put <NAME>` per secret, plus non-secret values
 under `wrangler.jsonc`'s `vars`.
 
-## Routes (Phase 0)
+## Routes
 
-| Route                                      | Purpose                                                                            |
-| ------------------------------------------ | ---------------------------------------------------------------------------------- |
-| `/`                                        | Public landing page                                                                |
-| `/sign-in`                                 | Magic-link sign-in for existing members                                            |
-| `/invite/accept?token=...`                 | Validates the invite, collects display name + 18+ attestation, creates the account |
-| `/legal/terms`, `/legal/privacy`           | Static pages                                                                       |
-| `/home` (under the `_app` pathless layout) | Auth-gated; welcome + an invites panel (send/list/revoke/resend)                   |
-| `/api/auth/$`                              | Catch-all mounting Better Auth's own handler                                       |
+| Route                            | Purpose                                                                                       |
+| -------------------------------- | --------------------------------------------------------------------------------------------- |
+| `/`                              | Public landing page                                                                           |
+| `/sign-in`                       | Magic-link or password sign-in for existing members                                           |
+| `/invite/accept?token=...`       | Validates the invite, collects display name + password + 18+ attestation, creates the account |
+| `/legal/terms`, `/legal/privacy` | Static pages                                                                                  |
+| `/feed`                          | Auth-gated landing page (placeholder until the real feed - Phase 1 task #17)                  |
+| `/settings/appearance`           | Auth-gated; theme picker (System/Light/Dark, persisted on `users.theme`)                      |
+| `/settings/invites`              | Auth-gated; invite panel (send/list/revoke/resend)                                            |
+| `/settings/account`              | Auth-gated; set-password card + sign out                                                      |
+| `/api/auth/$`                    | Catch-all mounting Better Auth's own handler                                                  |
+
+`/feed` and everything under `/settings` live under the `_app` pathless layout
+(`apps/web/src/routes/_app.tsx`), which renders the persistent nav shell
+(`apps/web/src/components/nav.tsx`: a bottom tab bar on mobile, a left rail ≥1024px per
+NFR-01) around every authenticated page.
 
 There is deliberately no custom `/auth/verify` page: Better Auth's own
 `/api/auth/magic-link/verify` endpoint (reached through the `/api/auth/$` catch-all) verifies

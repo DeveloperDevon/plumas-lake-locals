@@ -85,7 +85,7 @@ function AcceptInvite() {
               void acceptInvite({ data: { token, displayName, password, isAdult } }).then(
                 (result) => {
                   if (result.ok) {
-                    void router.navigate({ to: "/home" });
+                    void router.navigate({ to: "/feed" });
                   } else {
                     setState({ status: "error", message: result.message });
                   }

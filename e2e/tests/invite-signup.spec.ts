@@ -11,6 +11,8 @@ test("a neighbor accepts an invite, creates an account, and signs in", async ({
 }) => {
   const inviter = await seedMember();
   await signInAsExisting(page, inviter.email);
+  await page.goto("/settings/invites");
+  await waitForHydration(page);
 
   const newNeighborEmail = uniqueEmail("new-neighbor");
   const checkpoint = logCheckpoint();
@@ -35,9 +37,8 @@ test("a neighbor accepts an invite, creates an account, and signs in", async ({
 
   await neighborPage.getByRole("button", { name: "Create account" }).click();
 
-  await expect(neighborPage).toHaveURL(/\/home$/);
+  await expect(neighborPage).toHaveURL(/\/feed$/);
   await expect(neighborPage.getByRole("heading", { name: "Welcome, Jordan L." })).toBeVisible();
-  await expect(neighborPage.getByRole("heading", { name: "Invite a neighbor" })).toBeVisible();
 
   await neighborContext.close();
 });
@@ -45,6 +46,8 @@ test("a neighbor accepts an invite, creates an account, and signs in", async ({
 test("a second attempt to use the same invite token fails", async ({ page, browser }) => {
   const inviter = await seedMember();
   await signInAsExisting(page, inviter.email);
+  await page.goto("/settings/invites");
+  await waitForHydration(page);
 
   const email = uniqueEmail("one-time-use");
   const checkpoint = logCheckpoint();
@@ -61,7 +64,7 @@ test("a second attempt to use the same invite token fails", async ({ page, brows
   await neighborPage.getByLabel("Confirm password").fill("correct-horse-battery");
   await neighborPage.getByLabel("I am 18 or older").check();
   await neighborPage.getByRole("button", { name: "Create account" }).click();
-  await expect(neighborPage).toHaveURL(/\/home$/);
+  await expect(neighborPage).toHaveURL(/\/feed$/);
 
   // Reload the same accept URL - the invite is already accepted, so it must now be rejected.
   await neighborPage.goto(inviteUrl);

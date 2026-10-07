@@ -1,5 +1,7 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 
+import { NavRail, TabBar } from "../components/nav";
+
 export const Route = createFileRoute("/_app")({
   beforeLoad: ({ context }) => {
     // __root.tsx's own beforeLoad already fetched this - no need to query it again here.
@@ -10,5 +12,17 @@ export const Route = createFileRoute("/_app")({
     }
     return { user: context.session.user };
   },
-  component: Outlet,
+  component: AppShell,
 });
+
+function AppShell() {
+  return (
+    <div className="flex min-h-screen">
+      <NavRail />
+      <div className="min-w-0 flex-1 pb-16 lg:pb-0">
+        <Outlet />
+      </div>
+      <TabBar />
+    </div>
+  );
+}

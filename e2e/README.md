@@ -25,7 +25,7 @@ their real inbox. Tests run serially (`workers: 1`) because they share that one 
 React Email template (`.tsx`), and Playwright's own JSX handling for test files produced
 elements `react-dom/server` couldn't render ("Objects are not valid as a React child (found:
 object with keys `{__pw_type, type, props, key}`)") when that rendering happened inside the
-_test_ process. Routing invite creation through the real `/home` UI (see `helpers/ui.ts`'s
+_test_ process. Routing invite creation through the real `/settings/invites` UI (see `helpers/ui.ts`'s
 `signInAsExisting`, and `invite-signup.spec.ts`) sidesteps the conflict entirely and is more
 representative of what actually happens anyway.
 

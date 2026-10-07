@@ -3,7 +3,7 @@ import { expect, type Page } from "@playwright/test";
 import { logCheckpoint, waitForMagicLink } from "./mail";
 import { waitForHydration } from "./wait-for-hydration";
 
-/** Drives the real /sign-in form end to end, landing the page on /home. */
+/** Drives the real /sign-in form end to end, landing the page on /feed. */
 export async function signInAsExisting(page: Page, email: string): Promise<void> {
   await page.goto("/sign-in");
   await waitForHydration(page);
@@ -15,5 +15,5 @@ export async function signInAsExisting(page: Page, email: string): Promise<void>
 
   const magicLink = await waitForMagicLink(checkpoint);
   await page.goto(magicLink);
-  await expect(page).toHaveURL(/\/home$/);
+  await expect(page).toHaveURL(/\/feed$/);
 }

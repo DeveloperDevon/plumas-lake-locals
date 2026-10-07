@@ -1,5 +1,5 @@
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@plumas/ui";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 
@@ -8,15 +8,11 @@ import {
   resendMyInvite,
   revokeMyInvite,
   sendInvite,
-} from "../../server/functions/invites-admin";
-import { getHasPassword, setPassword, signOut } from "../../server/functions/session";
+} from "../../../server/functions/invites-admin";
 
-export const Route = createFileRoute("/_app/home")({
-  loader: async () => ({
-    invites: await getMyInvites(),
-    hasPassword: await getHasPassword(),
-  }),
-  component: Home,
+export const Route = createFileRoute("/_app/settings/invites")({
+  loader: async () => ({ invites: await getMyInvites() }),
+  component: Invites,
 });
 
 function inviteStatus(invite: {
@@ -30,116 +26,24 @@ function inviteStatus(invite: {
   return "pending";
 }
 
-function Home() {
-  const { user } = Route.useRouteContext();
-  const { invites, hasPassword } = Route.useLoaderData();
+function Invites() {
+  const { invites } = Route.useLoaderData();
   const router = useRouter();
 
-  const doSignOut = useServerFn(signOut);
   const doSendInvite = useServerFn(sendInvite);
   const doRevoke = useServerFn(revokeMyInvite);
   const doResend = useServerFn(resendMyInvite);
-  const doSetPassword = useServerFn(setPassword);
 
   const [email, setEmail] = useState("");
   const [note, setNote] = useState("");
   const [sending, setSending] = useState(false);
-
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [passwordState, setPasswordState] = useState<
-    { status: "idle" } | { status: "submitting" } | { status: "error"; message: string }
-  >({ status: "idle" });
 
   async function refresh() {
     await router.invalidate();
   }
 
   return (
-    <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Welcome, {user.name}</h1>
-        <div className="flex gap-2">
-          <Link to="/settings">
-            <Button variant="outline">Settings</Button>
-          </Link>
-          <Button
-            variant="outline"
-            onClick={() => {
-              void doSignOut().then(() => router.navigate({ to: "/sign-in" }));
-            }}
-          >
-            Sign out
-          </Button>
-        </div>
-      </div>
-
-      {hasPassword ? null : (
-        <Card>
-          <CardHeader>
-            <CardTitle>Set a password</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form
-              className="flex flex-col gap-3"
-              onSubmit={(event) => {
-                event.preventDefault();
-                if (newPassword !== confirmPassword) {
-                  setPasswordState({ status: "error", message: "Passwords don't match." });
-                  return;
-                }
-                setPasswordState({ status: "submitting" });
-                void doSetPassword({ data: { password: newPassword } }).then((result) => {
-                  if (result.ok) {
-                    setNewPassword("");
-                    setConfirmPassword("");
-                    setPasswordState({ status: "idle" });
-                    void refresh();
-                  } else {
-                    setPasswordState({ status: "error", message: result.message });
-                  }
-                });
-              }}
-            >
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="new-password">Password</Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  value={newPassword}
-                  onChange={(event) => {
-                    setNewPassword(event.target.value);
-                  }}
-                />
-              </div>
-              <div className="flex flex-col gap-2">
-                <Label htmlFor="confirm-new-password">Confirm password</Label>
-                <Input
-                  id="confirm-new-password"
-                  type="password"
-                  required
-                  minLength={8}
-                  autoComplete="new-password"
-                  value={confirmPassword}
-                  onChange={(event) => {
-                    setConfirmPassword(event.target.value);
-                  }}
-                />
-              </div>
-              {passwordState.status === "error" ? (
-                <p className="text-sm text-destructive">{passwordState.message}</p>
-              ) : null}
-              <Button type="submit" disabled={passwordState.status === "submitting"}>
-                {passwordState.status === "submitting" ? "Saving..." : "Set password"}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
+    <div className="flex flex-col gap-6">
       <Card>
         <CardHeader>
           <CardTitle>Invite a neighbor</CardTitle>
@@ -236,6 +140,6 @@ function Home() {
           )}
         </CardContent>
       </Card>
-    </main>
+    </div>
   );
 }

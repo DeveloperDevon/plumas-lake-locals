@@ -47,7 +47,7 @@ function SignIn() {
               setStatus({ kind: "signing-in" });
               void signIn({ data: { email, password } }).then((result) => {
                 if (result.ok) {
-                  void router.navigate({ to: "/home" });
+                  void router.navigate({ to: "/feed" });
                 } else {
                   setStatus({ kind: "error", message: result.message });
                 }

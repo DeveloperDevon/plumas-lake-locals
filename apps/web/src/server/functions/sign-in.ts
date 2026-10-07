@@ -13,7 +13,7 @@ export const requestSignInLink = createServerFn({ method: "POST" })
   .validator(magicLinkRequestSchema)
   .handler(async ({ data }) => {
     await createAuth().api.signInMagicLink({
-      body: { email: data.email, callbackURL: "/home" },
+      body: { email: data.email, callbackURL: "/feed" },
       headers: getRequest().headers,
     });
     return { sent: true };
