@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
-import { inverseRelationshipType, relationshipTypes, relationshipTypeSchema } from "./relationship";
+import {
+  inverseRelationshipType,
+  relationshipLabel,
+  relationshipTypes,
+  relationshipTypeSchema,
+} from "./relationship";
 
 describe("relationshipTypeSchema", () => {
   it("accepts every canonical type", () => {
@@ -31,5 +36,35 @@ describe("inverseRelationshipType", () => {
     expect(inverseRelationshipType("spouse")).toBe("spouse");
     expect(inverseRelationshipType("sibling")).toBe("sibling");
     expect(inverseRelationshipType("friend")).toBe("friend");
+  });
+});
+
+describe("relationshipLabel", () => {
+  it("returns the neutral term for every type when gender is neutral", () => {
+    expect(relationshipLabel("parent", "neutral")).toBe("Parent");
+    expect(relationshipLabel("child", "neutral")).toBe("Child");
+    expect(relationshipLabel("friend", "neutral")).toBe("Friend");
+  });
+
+  it("returns the gendered pair for types that have one", () => {
+    expect(relationshipLabel("parent", "masculine")).toBe("Father");
+    expect(relationshipLabel("parent", "feminine")).toBe("Mother");
+    expect(relationshipLabel("child", "masculine")).toBe("Son");
+    expect(relationshipLabel("child", "feminine")).toBe("Daughter");
+    expect(relationshipLabel("sibling", "masculine")).toBe("Brother");
+    expect(relationshipLabel("sibling", "feminine")).toBe("Sister");
+    expect(relationshipLabel("grandparent", "masculine")).toBe("Grandfather");
+    expect(relationshipLabel("grandchild", "feminine")).toBe("Granddaughter");
+    expect(relationshipLabel("aunt_uncle", "masculine")).toBe("Uncle");
+    expect(relationshipLabel("niece_nephew", "feminine")).toBe("Niece");
+    expect(relationshipLabel("spouse", "masculine")).toBe("Husband");
+    expect(relationshipLabel("spouse", "feminine")).toBe("Wife");
+  });
+
+  it("falls back to the neutral term for types with no clean gendered pair", () => {
+    expect(relationshipLabel("partner", "masculine")).toBe("Partner");
+    expect(relationshipLabel("cousin", "feminine")).toBe("Cousin");
+    expect(relationshipLabel("in_law", "masculine")).toBe("In-law");
+    expect(relationshipLabel("friend", "feminine")).toBe("Friend");
   });
 });

@@ -12,7 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
-import { themeEnum, userRoleEnum, userStatusEnum } from "./enums";
+import { relationshipLabelGenderEnum, themeEnum, userRoleEnum, userStatusEnum } from "./enums";
 
 export const users = pgTable(
   "users",
@@ -45,6 +45,11 @@ export const users = pgTable(
     // @plumas/validators' fieldVisibilitySchema, not a DB constraint (same reasoning as
     // moderation.ts's `details` jsonb column).
     fieldVisibility: jsonb("field_visibility"),
+    // FR-REL-03: used only to pick the gendered word in relationship labels (Son/Daughter,
+    // Mother/Father, ...) shown on someone else's profile - not a general identity field.
+    relationshipLabelGender: relationshipLabelGenderEnum("relationship_label_gender")
+      .notNull()
+      .default("neutral"),
     invitedBy: uuid("invited_by").references((): AnyPgColumn => users.id),
     role: userRoleEnum("role").notNull().default("member"),
     status: userStatusEnum("status").notNull().default("active"),

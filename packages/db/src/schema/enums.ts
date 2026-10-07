@@ -1,6 +1,7 @@
 import {
   postCategories,
   reactionTypes,
+  relationshipLabelGenderValues,
   relationshipStatuses,
   relationshipTypes,
   themes,
@@ -13,6 +14,11 @@ export const userStatusEnum = pgEnum("user_status", ["active", "suspended"]);
 // Generated from @plumas/validators' canonical list, same reasoning as relationshipTypeEnum
 // below: the zod schema and the database enum can never drift apart.
 export const themeEnum = pgEnum("theme", [...themes]);
+
+// Generated from @plumas/validators' canonical list, same reasoning as themeEnum above.
+export const relationshipLabelGenderEnum = pgEnum("relationship_label_gender", [
+  ...relationshipLabelGenderValues,
+]);
 
 // Generated from @plumas/validators' canonical list so the app's zod schema and the
 // database enum can never drift apart (see docs/adr/0002 and the PRD discrepancy note).

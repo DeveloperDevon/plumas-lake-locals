@@ -1,6 +1,12 @@
 import { type Database, schema } from "@plumas/db";
-import type { FieldVisibility, UserProfileInput } from "@plumas/validators";
+import type {
+  FieldVisibility,
+  RelationshipLabelGender,
+  UserProfileInput,
+} from "@plumas/validators";
 import { eq } from "drizzle-orm";
+
+import { hasAcceptedRelationship } from "./relationship-service";
 
 const { users } = schema;
 
@@ -23,6 +29,7 @@ export async function updateProfile(database: Database, userId: string, data: Us
       birthdayMonth: data.birthdayMonth ?? null,
       birthdayDay: data.birthdayDay ?? null,
       fieldVisibility: data.fieldVisibility ?? null,
+      relationshipLabelGender: data.relationshipLabelGender ?? "neutral",
     })
     .where(eq(users.id, userId));
 }
@@ -44,17 +51,12 @@ export interface ProfileView {
   // to populate the edit form; a non-owner viewer only ever sees the already-filtered fields
   // above, never this map itself.
   fieldVisibility: FieldVisibility | null;
+  relationshipLabelGender: RelationshipLabelGender;
   joinedAt: Date;
   inviterDisplayName: string | null;
   isOwner: boolean;
 }
 
-/**
- * FR-PRO-05's "connections" visibility can't be properly enforced until relationships ship
- * (task #19) - until then every non-owner viewer is treated as not connected, so a
- * "connections" field is hidden rather than over-exposed. Revisit this function once task #19
- * lands to actually check the viewer/owner relationship.
- */
 export async function getProfile(
   database: Database,
   userId: string,
@@ -73,8 +75,10 @@ export async function getProfile(
   }
 
   const isOwner = viewerId === userId;
+  const isConnected = isOwner || (await hasAcceptedRelationship(database, viewerId, userId));
   const visibility = (user.fieldVisibility as FieldVisibility | null) ?? {};
-  const visible = (field: keyof FieldVisibility) => isOwner || visibility[field] !== "connections";
+  const visible = (field: keyof FieldVisibility) =>
+    isOwner || isConnected || visibility[field] !== "connections";
 
   return {
     id: user.id,
@@ -90,6 +94,7 @@ export async function getProfile(
     birthdayMonth: visible("birthday") ? user.birthdayMonth : null,
     birthdayDay: visible("birthday") ? user.birthdayDay : null,
     fieldVisibility: isOwner ? visibility : null,
+    relationshipLabelGender: user.relationshipLabelGender,
     joinedAt: user.createdAt,
     inviterDisplayName,
     isOwner,

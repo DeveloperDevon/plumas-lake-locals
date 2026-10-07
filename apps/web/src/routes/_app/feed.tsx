@@ -1,7 +1,7 @@
 import { Button, Card, CardContent, CardHeader, CardTitle, Textarea } from "@plumas/ui";
 import type { PostCategory, ReactionType } from "@plumas/validators";
 import { postCategories, reactionTypes } from "@plumas/validators";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { CircleUserRound, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
@@ -274,7 +274,11 @@ function PostCard({
   return (
     <Card>
       <CardHeader className="flex flex-row items-start justify-between gap-2">
-        <div className="flex items-center gap-3">
+        <Link
+          to="/profile/$userId"
+          params={{ userId: post.authorId }}
+          className="flex items-center gap-3"
+        >
           {post.authorAvatarKey ? (
             <img
               src={mediaUrl(post.authorAvatarKey, "thumbnail")}
@@ -285,14 +289,14 @@ function PostCard({
             <CircleUserRound className="h-10 w-10 text-muted-foreground" />
           )}
           <div>
-            <p className="text-sm font-medium">{post.authorDisplayName}</p>
+            <p className="text-sm font-medium hover:underline">{post.authorDisplayName}</p>
             <p className="text-xs text-muted-foreground">
               {post.createdAt.toLocaleString()}
               {post.editedAt ? " · edited" : null}
               {post.pinnedAt ? " · Pinned" : null}
             </p>
           </div>
-        </div>
+        </Link>
         <div className="flex gap-1">
           {isAdmin ? (
             <Button

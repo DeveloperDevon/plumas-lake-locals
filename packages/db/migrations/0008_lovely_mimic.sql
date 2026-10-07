@@ -1,0 +1,2 @@
+CREATE TYPE "public"."relationship_label_gender" AS ENUM('masculine', 'feminine', 'neutral');--> statement-breakpoint
+ALTER TABLE "users" ADD COLUMN "relationship_label_gender" "relationship_label_gender" DEFAULT 'neutral' NOT NULL;

@@ -8,7 +8,7 @@ import {
   Label,
   Textarea,
 } from "@plumas/ui";
-import type { FieldVisibility } from "@plumas/validators";
+import type { FieldVisibility, RelationshipLabelGender } from "@plumas/validators";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { CircleUserRound } from "lucide-react";
@@ -117,6 +117,9 @@ function ProfileSettings() {
   const [birthdayMonth, setBirthdayMonth] = useState(profile?.birthdayMonth?.toString() ?? "");
   const [birthdayDay, setBirthdayDay] = useState(profile?.birthdayDay?.toString() ?? "");
   const [visibility, setVisibility] = useState<FieldVisibility>(profile?.fieldVisibility ?? {});
+  const [relationshipLabelGender, setRelationshipLabelGender] = useState<RelationshipLabelGender>(
+    profile?.relationshipLabelGender ?? "neutral",
+  );
   const [state, setState] = useState<
     { status: "idle" } | { status: "submitting" } | { status: "error"; message: string }
   >({ status: "idle" });
@@ -172,6 +175,7 @@ function ProfileSettings() {
                   birthdayMonth: birthdayMonth ? Number(birthdayMonth) : null,
                   birthdayDay: birthdayDay ? Number(birthdayDay) : null,
                   fieldVisibility: visibility,
+                  relationshipLabelGender,
                 },
               })
                 .then(() => {
@@ -301,6 +305,26 @@ function ProfileSettings() {
                   ))}
                 </select>
               </div>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <Label htmlFor="relationship-label-gender">Relationship label</Label>
+              <p className="text-xs text-muted-foreground">
+                Used to pick the word for how family members describe you (e.g. Son/Daughter,
+                Mother/Father) on their profile.
+              </p>
+              <select
+                id="relationship-label-gender"
+                className="h-11 rounded-md border border-border bg-background px-3 text-base text-foreground"
+                value={relationshipLabelGender}
+                onChange={(event) => {
+                  setRelationshipLabelGender(event.target.value as RelationshipLabelGender);
+                }}
+              >
+                <option value="neutral">Neutral (Child, Parent, Sibling...)</option>
+                <option value="masculine">Masculine (Son, Father, Brother...)</option>
+                <option value="feminine">Feminine (Daughter, Mother, Sister...)</option>
+              </select>
             </div>
 
             <div className="flex flex-col gap-2">

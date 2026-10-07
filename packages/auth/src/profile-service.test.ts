@@ -2,6 +2,7 @@ import { createDb, schema } from "@plumas/db";
 import { describe, expect, it } from "vitest";
 
 import { getProfile, updateProfile } from "./profile-service";
+import { acceptRelationship, requestRelationship } from "./relationship-service";
 
 const { users } = schema;
 
@@ -92,6 +93,37 @@ describe("profile-service (integration, against the real local Postgres)", () =>
     expect(asViewer?.occupation).toBeNull();
     // The raw visibility map itself is only ever handed back to the owner.
     expect(asViewer?.fieldVisibility).toBeNull();
+  });
+
+  it("shows a 'connections' field to a viewer with an accepted relationship (task #19)", async () => {
+    const [owner] = await db
+      .insert(users)
+      .values({ email: uniqueEmail("owner-conn"), displayName: "Owner" })
+      .returning();
+    const [viewer] = await db
+      .insert(users)
+      .values({ email: uniqueEmail("viewer-conn"), displayName: "Viewer" })
+      .returning();
+    if (!owner || !viewer) throw new Error("setup failed");
+
+    await updateProfile(db, owner.id, {
+      displayName: "Owner",
+      occupation: "Teacher",
+      fieldVisibility: { occupation: "connections" },
+    });
+
+    const beforeConnecting = await getProfile(db, owner.id, viewer.id);
+    expect(beforeConnecting?.occupation).toBeNull();
+
+    const request = await requestRelationship(db, {
+      fromUserId: viewer.id,
+      toUserId: owner.id,
+      type: "friend",
+    });
+    await acceptRelationship(db, request.id, owner.id);
+
+    const afterConnecting = await getProfile(db, owner.id, viewer.id);
+    expect(afterConnecting?.occupation).toBe("Teacher");
   });
 
   it("resolves the inviter's display name when invitedBy is set", async () => {

@@ -24,10 +24,15 @@ export const birthdayMonthSchema = z.number().int().min(1).max(12);
 export const birthdayDaySchema = z.number().int().min(1).max(31);
 
 /**
- * FR-PRO-05. "connections" can't be properly enforced until relationships ship (task #19) -
- * until then, @plumas/auth's getProfile treats every non-owner viewer as not connected, so a
- * "connections" field is hidden from everyone but its owner rather than over-exposed.
+ * FR-REL-03: used only to pick the gendered word in a relationship label (Son/Daughter,
+ * Mother/Father, ...) shown on someone else's profile - not a general identity field.
+ * "neutral" falls back to the ungendered term (Child, Parent, Sibling, ...).
  */
+export const relationshipLabelGenderValues = ["masculine", "feminine", "neutral"] as const;
+export type RelationshipLabelGender = (typeof relationshipLabelGenderValues)[number];
+export const relationshipLabelGenderSchema = z.enum(relationshipLabelGenderValues);
+
+// FR-PRO-05.
 export const profileVisibilityValues = ["all", "connections"] as const;
 export type ProfileVisibility = (typeof profileVisibilityValues)[number];
 export const profileVisibilitySchema = z.enum(profileVisibilityValues);
@@ -52,5 +57,6 @@ export const userProfileSchema = z.object({
   birthdayMonth: birthdayMonthSchema.nullable().optional(),
   birthdayDay: birthdayDaySchema.nullable().optional(),
   fieldVisibility: fieldVisibilitySchema.optional(),
+  relationshipLabelGender: relationshipLabelGenderSchema.optional(),
 });
 export type UserProfileInput = z.infer<typeof userProfileSchema>;
