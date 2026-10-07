@@ -19,6 +19,7 @@ dist/
 
 # generated
 apps/web/src/routeTree.gen.ts
+apps/web/worker-configuration.d.ts
 packages/*/dist/
 
 # editors / os

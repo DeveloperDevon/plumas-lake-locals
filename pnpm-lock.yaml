@@ -237,6 +237,9 @@ importers:
       "@better-auth/passkey":
         specifier: 1.7.7
         version: 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@3.25.76))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7(@tanstack/react-start@1.168.60(esbuild@0.28.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rolldown@1.2.12)(rollup@4.64.0)(supports-color@7.2.0)(vite@8.3.2(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(next@15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0)))(better-call@1.4.0(zod@3.25.76))(nanostores@1.5.4)
+      "@cf-wasm/photon":
+        specifier: 0.4.0
+        version: 0.4.0
       "@plumas/auth":
         specifier: workspace:*
         version: link:../../packages/auth
@@ -261,6 +264,9 @@ importers:
       better-auth:
         specifier: ^1.7.7
         version: 1.7.7(@tanstack/react-start@1.168.60(esbuild@0.28.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rolldown@1.2.12)(rollup@4.64.0)(supports-color@7.2.0)(vite@8.3.2(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(next@15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0))
+      heic-to:
+        specifier: 1.6.5
+        version: 1.6.5
       lucide-react:
         specifier: ^0.460.0
         version: 0.460.0(react@19.3.0)
@@ -821,6 +827,18 @@ packages:
     resolution:
       {
         integrity: sha512-Gs7n99b5tqUC6cQAPbV0uED3IraHB6xQbHLQ/C3l7ZFafHScOx9pQ+DYmP5blbLFShVWLqxNUlI9wi4xU/X+ow==,
+      }
+
+  "@cf-wasm/internals@0.2.0":
+    resolution:
+      {
+        integrity: sha512-QwMNETkTCtrx0uCzjJPRCTyok0OZNvOry9alfG8a8TpHo7oPJ17htPMDG4ptudpwe9F0VtJHy9+nOzJmupteiQ==,
+      }
+
+  "@cf-wasm/photon@0.4.0":
+    resolution:
+      {
+        integrity: sha512-PQcN6sThZAR/V6SH2MQmeFndDDhGfOxvra6UStyaBbkDHrgTPKvB+WapAhh0/TA9LsRAUaX/rEEw6hvY9uphbQ==,
       }
 
   "@changesets/apply-release-plan@7.1.1":
@@ -6195,6 +6213,12 @@ packages:
       }
     engines: { node: ">= 0.4" }
 
+  heic-to@1.6.5:
+    resolution:
+      {
+        integrity: sha512-xPH6gvrzSRIFo/GyzYbr+DZX1JoQliw1oJBT1PCduR0ruDVs1DjlAdU1m5Thed2ZXBoLqYMCd5UXiJteRl3BNQ==,
+      }
+
   html-to-text@9.0.5:
     resolution:
       {
@@ -9214,6 +9238,12 @@ snapshots:
       "@noble/hashes": 2.4.0
 
   "@better-fetch/fetch@1.3.2": {}
+
+  "@cf-wasm/internals@0.2.0": {}
+
+  "@cf-wasm/photon@0.4.0":
+    dependencies:
+      "@cf-wasm/internals": 0.2.0
 
   "@changesets/apply-release-plan@7.1.1":
     dependencies:
@@ -12336,6 +12366,8 @@ snapshots:
   hasown@2.0.4:
     dependencies:
       function-bind: 1.1.2
+
+  heic-to@1.6.5: {}
 
   html-to-text@9.0.5:
     dependencies:
