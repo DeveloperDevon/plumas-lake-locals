@@ -6,6 +6,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { CircleUserRound } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { ReportToggle } from "../../../components/report-toggle";
+import { formatDate } from "../../../lib/format-date";
 import { mediaUrl, uploadImage } from "../../../lib/upload-image";
 import { getUserMedia } from "../../../server/functions/media";
 import { getProfileById } from "../../../server/functions/profile";
@@ -36,11 +38,10 @@ export const Route = createFileRoute("/_app/profile/$userId")({
 
 function formatBirthday(month: number | null, day: number | null): string | null {
   if (!month || !day) return null;
-  // Year is arbitrary and never stored - only used to format month/day with Intl.
-  return new Date(2000, month - 1, day).toLocaleDateString(undefined, {
-    month: "long",
-    day: "numeric",
-  });
+  // Year is arbitrary and never stored - only used to format month/day with Intl. Built from
+  // UTC components (not local ones) so the day can't shift across the UTC boundary before
+  // formatDate reads it back in UTC - server and client always agree either way.
+  return formatDate(new Date(Date.UTC(2000, month - 1, day)), { month: "long", day: "numeric" });
 }
 
 function ProfileView() {
@@ -85,7 +86,7 @@ function ProfileView() {
           <div>
             <h1 className="text-2xl font-semibold">{profile.displayName}</h1>
             <p className="text-sm text-muted-foreground">
-              Joined {profile.joinedAt.toLocaleDateString()}
+              Joined {formatDate(profile.joinedAt)}
               {profile.inviterDisplayName ? ` · Invited by ${profile.inviterDisplayName}` : null}
             </p>
           </div>
@@ -97,7 +98,9 @@ function ProfileView() {
           >
             Edit profile
           </Link>
-        ) : null}
+        ) : (
+          <ReportToggle targetType="profile" targetId={userId} />
+        )}
       </div>
 
       {!profile.isOwner ? (

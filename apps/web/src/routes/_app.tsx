@@ -10,6 +10,12 @@ export const Route = createFileRoute("/_app")({
       // eslint-disable-next-line @typescript-eslint/only-throw-error
       throw redirect({ to: "/sign-in" });
     }
+    // A clean redirect for navigation - requireUser() (apps/web/src/server/auth.ts) is the
+    // real enforcement point that blocks every mutating server function, not this check.
+    if (context.session.user.status !== "active") {
+      // eslint-disable-next-line @typescript-eslint/only-throw-error
+      throw redirect({ to: "/suspended" });
+    }
     return { user: context.session.user };
   },
   component: AppShell,
@@ -17,13 +23,14 @@ export const Route = createFileRoute("/_app")({
 
 function AppShell() {
   const { user } = Route.useRouteContext();
+  const isAdmin = user.role === "admin";
   return (
     <div className="flex min-h-screen">
-      <NavRail userId={user.id} />
+      <NavRail userId={user.id} isAdmin={isAdmin} />
       <div className="min-w-0 flex-1 pb-16 lg:pb-0">
         <Outlet />
       </div>
-      <TabBar userId={user.id} />
+      <TabBar userId={user.id} isAdmin={isAdmin} />
     </div>
   );
 }

@@ -14,6 +14,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { CircleUserRound } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { formatDate } from "../../../lib/format-date";
 import { mediaUrl, uploadImage } from "../../../lib/upload-image";
 import { getProfileById, updateMyProfile } from "../../../server/functions/profile";
 
@@ -280,9 +281,7 @@ function ProfileSettings() {
                   <option value="">Not set</option>
                   {Array.from({ length: 12 }, (_, i) => i + 1).map((month) => (
                     <option key={month} value={month}>
-                      {new Date(2000, month - 1, 1).toLocaleDateString(undefined, {
-                        month: "long",
-                      })}
+                      {formatDate(new Date(Date.UTC(2000, month - 1, 1)), { month: "long" })}
                     </option>
                   ))}
                 </select>

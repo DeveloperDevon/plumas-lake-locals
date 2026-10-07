@@ -6,6 +6,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { CircleUserRound, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { ReportToggle } from "../../components/report-toggle";
+import { formatDateTime } from "../../lib/format-date";
 import { mediaUrl, uploadImage } from "../../lib/upload-image";
 import {
   createCommentFn,
@@ -291,7 +293,7 @@ function PostCard({
           <div>
             <p className="text-sm font-medium hover:underline">{post.authorDisplayName}</p>
             <p className="text-xs text-muted-foreground">
-              {post.createdAt.toLocaleString()}
+              {formatDateTime(post.createdAt)}
               {post.editedAt ? " · edited" : null}
               {post.pinnedAt ? " · Pinned" : null}
             </p>
@@ -438,7 +440,10 @@ function PostCard({
           </div>
         ) : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
-        <ReactionBar post={post} onChanged={onChanged} />
+        <div className="flex items-center justify-between">
+          <ReactionBar post={post} onChanged={onChanged} />
+          {!isOwner ? <ReportToggle targetType="post" targetId={post.id} /> : null}
+        </div>
         <CommentsSection
           postId={post.id}
           commentCount={post.commentCount}
@@ -614,7 +619,7 @@ function CommentsSection({
         <div className="flex items-center gap-2">
           <p className="text-xs font-medium">{comment.authorDisplayName}</p>
           <p className="text-xs text-muted-foreground">
-            {comment.createdAt.toLocaleString()}
+            {formatDateTime(comment.createdAt)}
             {comment.editedAt ? " · edited" : null}
           </p>
         </div>
@@ -692,7 +697,9 @@ function CommentsSection({
                   Delete
                 </button>
               </>
-            ) : null}
+            ) : (
+              <ReportToggle targetType="comment" targetId={comment.id} />
+            )}
           </div>
         ) : null}
         {!isReply && replyingTo === comment.id ? (

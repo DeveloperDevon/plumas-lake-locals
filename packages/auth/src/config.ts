@@ -69,6 +69,15 @@ export function createAuth() {
           input: false,
           defaultValue: "member",
         },
+        // Same reasoning as role above - requireUser() (apps/web/src/server/auth.ts) re-reads
+        // this off the live session on every request and is the actual enforcement point for
+        // a suspension, not this cached field by itself.
+        status: {
+          type: "string",
+          required: false,
+          input: false,
+          defaultValue: "active",
+        },
       },
     },
     session: {

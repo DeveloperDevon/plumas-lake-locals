@@ -3,6 +3,7 @@ export * from "./comment";
 export * from "./common";
 export * from "./invite";
 export * from "./media";
+export * from "./moderation";
 export * from "./post";
 export * from "./reaction";
 export * from "./relationship";

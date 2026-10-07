@@ -9,7 +9,7 @@ import {
   Input,
   Label,
 } from "@plumas/ui";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 
@@ -145,7 +145,12 @@ function AcceptInvite() {
                   setIsAdult(checked === true);
                 }}
               />
-              <Label htmlFor="isAdult">I am 18 or older</Label>
+              <Label htmlFor="isAdult">
+                I am 18 or older and agree to the community guidelines and{" "}
+                <Link to="/legal/terms" target="_blank" className="underline">
+                  terms of use
+                </Link>
+              </Label>
             </div>
             {state.status === "error" ? (
               <p className="text-sm text-destructive">{state.message}</p>
