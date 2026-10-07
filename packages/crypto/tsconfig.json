@@ -1,4 +1,10 @@
 {
   "extends": "@plumas/config/tsconfig.node.json",
-  "include": ["src"]
+  "compilerOptions": {
+    // The real DM client (this package's eventual purpose) runs crypto.subtle/Web Crypto in
+    // the browser, not Node's own crypto module - DOM gives CryptoKey/BufferSource et al.
+    // without pulling in the rest of the DOM lib's browser-only globals this package doesn't use.
+    "lib": ["ES2022", "DOM"]
+  },
+  "include": ["src", "harness"]
 }

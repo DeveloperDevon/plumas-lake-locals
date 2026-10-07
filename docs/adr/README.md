@@ -5,3 +5,4 @@
 - [0003 — Auth strategy and invite gating](0003-auth-strategy-invite-gating.md)
 - [0004 — Hosting and frontend tooling](0004-hosting-and-frontend-tooling.md)
 - [0005 — End-to-end encrypted messaging deferred](0005-messaging-encryption-deferred.md)
+- [0006 — MLS library choice for direct messages](0006-mls-library-choice.md)

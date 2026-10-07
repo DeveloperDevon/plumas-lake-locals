@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>MLS crypto spike - task #21</title>
+    <style>
+      body {
+        font-family:
+          -apple-system,
+          BlinkMacSystemFont,
+          sans-serif;
+        max-width: 760px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+        color: #111;
+      }
+      button {
+        display: block;
+        width: 100%;
+        padding: 0.75rem;
+        margin: 0.5rem 0;
+        font-size: 1rem;
+        cursor: pointer;
+      }
+      pre {
+        background: #f4f4f4;
+        padding: 1rem;
+        border-radius: 6px;
+        white-space: pre-wrap;
+        word-break: break-word;
+      }
+      .pass {
+        color: #0a7a2a;
+        font-weight: 600;
+      }
+      .fail {
+        color: #c0392b;
+        font-weight: 600;
+      }
+      #qr-canvas {
+        border: 1px solid #ccc;
+        margin: 0.5rem 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>MLS crypto spike (task #21)</h1>
+    <p>
+      Manual cross-browser harness for <code>docs/adr/0006-mls-library-choice.md</code>. Not
+      production code - see <code>packages/crypto/src/spike/</code>.
+    </p>
+
+    <button id="run-one-to-one">Run: 1:1 chat</button>
+    <button id="run-large-group">Run: 50-member group (slow, ~30s)</button>
+    <button id="run-device-linking">Run: device linking (real QR image round-trip)</button>
+    <button id="run-backup-restore">Run: encrypted backup + restore</button>
+    <button id="run-all">Run all four</button>
+
+    <canvas id="qr-canvas" width="300" height="300" hidden></canvas>
+    <pre id="output">Results appear here.</pre>
+
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

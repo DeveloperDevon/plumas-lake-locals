@@ -8,12 +8,23 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run",
+    "harness": "vite harness --port 5174"
   },
   "devDependencies": {
     "@plumas/config": "workspace:*",
     "@types/node": "^22.10.0",
+    "@types/qrcode": "^1.5.6",
     "eslint": "^9.17.0",
-    "typescript": "^6.0.3"
+    "jsqr": "^1.4.0",
+    "qrcode": "^1.5.4",
+    "typescript": "^6.0.3",
+    "vite": "^8.3.2",
+    "vitest": "^2.1.9"
+  },
+  "dependencies": {
+    "@hpke/core": "^1.9.0",
+    "ts-mls": "^1.6.4"
   }
 }
