@@ -1,5 +1,16 @@
+import { sql } from "drizzle-orm";
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
-import { boolean, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import {
+  boolean,
+  check,
+  index,
+  integer,
+  jsonb,
+  pgTable,
+  text,
+  timestamp,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 import { themeEnum, userRoleEnum, userStatusEnum } from "./enums";
 
@@ -16,7 +27,24 @@ export const users = pgTable(
     emailVerified: boolean("email_verified").notNull().default(false),
     image: text("image"),
     avatarKey: text("avatar_key"),
+    // Populated starting with task #16's media/R2 pipeline - the column exists now so that
+    // phase needs no migration of its own, same reasoning as avatarKey in Phase 0.
+    coverKey: text("cover_key"),
     bio: text("bio"),
+    // FR-PRO-01 (always visible, not covered by fieldVisibility below).
+    street: text("street"),
+    // FR-PRO-02: optional fields, each covered by fieldVisibility.
+    interests: text("interests").array(),
+    occupation: text("occupation"),
+    pets: text("pets"),
+    website: text("website"),
+    birthdayMonth: integer("birthday_month"),
+    birthdayDay: integer("birthday_day"),
+    // FR-PRO-05: one "all" | "connections" value per optional field above, e.g.
+    // {"interests":"all","occupation":"connections"} - validated by
+    // @plumas/validators' fieldVisibilitySchema, not a DB constraint (same reasoning as
+    // moderation.ts's `details` jsonb column).
+    fieldVisibility: jsonb("field_visibility"),
     invitedBy: uuid("invited_by").references((): AnyPgColumn => users.id),
     role: userRoleEnum("role").notNull().default("member"),
     status: userStatusEnum("status").notNull().default("active"),
@@ -29,5 +57,15 @@ export const users = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
-  (t) => [index("users_invited_by_idx").on(t.invitedBy)],
+  (t) => [
+    index("users_invited_by_idx").on(t.invitedBy),
+    check(
+      "users_birthday_month_check",
+      sql`${t.birthdayMonth} is null or ${t.birthdayMonth} between 1 and 12`,
+    ),
+    check(
+      "users_birthday_day_check",
+      sql`${t.birthdayDay} is null or ${t.birthdayDay} between 1 and 31`,
+    ),
+  ],
 );

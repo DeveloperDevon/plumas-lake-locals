@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Newspaper, Settings as SettingsIcon } from "lucide-react";
+import { CircleUserRound, Newspaper, Settings as SettingsIcon } from "lucide-react";
 import type { ComponentType } from "react";
 
 interface NavItem {
@@ -8,19 +8,22 @@ interface NavItem {
   icon: ComponentType<{ className?: string }>;
 }
 
-// Feed and Settings only for now - Profile (task #15) and an admin-only Admin item (task #20)
-// get added here once those pages actually exist, rather than linking to dead routes today.
-const navItems: NavItem[] = [
-  { to: "/feed", label: "Feed", icon: Newspaper },
-  { to: "/settings", label: "Settings", icon: SettingsIcon },
-];
+// Feed, Profile and Settings for now - an admin-only Admin item (task #20) gets added here
+// once that page actually exists, rather than linking to a dead route today.
+function navItems(userId: string): NavItem[] {
+  return [
+    { to: "/feed", label: "Feed", icon: Newspaper },
+    { to: `/profile/${userId}`, label: "Profile", icon: CircleUserRound },
+    { to: "/settings", label: "Settings", icon: SettingsIcon },
+  ];
+}
 
 // ≥1024px (NFR-01) - Tailwind's lg: breakpoint already lines up, no custom config needed.
-export function NavRail() {
+export function NavRail({ userId }: { userId: string }) {
   return (
     <nav className="hidden w-56 shrink-0 flex-col gap-1 border-r border-border bg-card p-4 lg:flex">
       <p className="mb-4 px-3 text-sm font-semibold text-foreground">Plumas Lake Locals</p>
-      {navItems.map((item) => (
+      {navItems(userId).map((item) => (
         <Link
           key={item.to}
           to={item.to}
@@ -35,13 +38,13 @@ export function NavRail() {
   );
 }
 
-export function TabBar() {
+export function TabBar({ userId }: { userId: string }) {
   return (
     <nav
       className="fixed inset-x-0 bottom-0 flex border-t border-border bg-card lg:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      {navItems.map((item) => (
+      {navItems(userId).map((item) => (
         <Link
           key={item.to}
           to={item.to}

@@ -3,6 +3,7 @@ import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 export const Route = createFileRoute("/_app/settings")({ component: SettingsLayout });
 
 const tabs = [
+  { to: "/settings/profile", label: "Profile" },
   { to: "/settings/appearance", label: "Appearance" },
   { to: "/settings/invites", label: "Invites" },
   { to: "/settings/account", label: "Account" },

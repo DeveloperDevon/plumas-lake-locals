@@ -16,13 +16,14 @@ export const Route = createFileRoute("/_app")({
 });
 
 function AppShell() {
+  const { user } = Route.useRouteContext();
   return (
     <div className="flex min-h-screen">
-      <NavRail />
+      <NavRail userId={user.id} />
       <div className="min-w-0 flex-1 pb-16 lg:pb-0">
         <Outlet />
       </div>
-      <TabBar />
+      <TabBar userId={user.id} />
     </div>
   );
 }
