@@ -17,11 +17,11 @@ import { getDb } from "../db";
 export const getFeed = createServerFn({ method: "GET" })
   .validator(cursorPaginationSchema)
   .handler(async ({ data }) => {
-    await requireUser();
+    const user = await requireUser();
     const db = getDb();
     const [page, pinned] = await Promise.all([
-      listFeedPosts(db, { cursor: data.cursor, limit: data.limit }),
-      data.cursor ? Promise.resolve([]) : listPinnedPosts(db),
+      listFeedPosts(db, { cursor: data.cursor, limit: data.limit, viewerId: user.id }),
+      data.cursor ? Promise.resolve([]) : listPinnedPosts(db, user.id),
     ]);
     return { ...page, pinned };
   });

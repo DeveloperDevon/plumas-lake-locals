@@ -1,5 +1,6 @@
 import {
   postCategories,
+  reactionTypes,
   relationshipStatuses,
   relationshipTypes,
   themes,
@@ -53,12 +54,8 @@ export const participantStatusEnum = pgEnum("participant_status", [
 
 // Polymorphic target for both comments and reactions.
 export const commentTargetTypeEnum = pgEnum("comment_target_type", ["post", "listing", "event"]);
-export const reactionTypeEnum = pgEnum("reaction_type", [
-  "like",
-  "love",
-  "laugh",
-  "sad",
-  "helpful",
-]);
+// Generated from @plumas/validators' canonical list, same reasoning as themeEnum above - the
+// values are unchanged, this just relocates the source of truth (task #18 drive-by).
+export const reactionTypeEnum = pgEnum("reaction_type", [...reactionTypes]);
 
 export const eventHostTypeEnum = pgEnum("event_host_type", ["group", "business"]);

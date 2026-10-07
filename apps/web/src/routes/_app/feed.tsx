@@ -1,12 +1,20 @@
 import { Button, Card, CardContent, CardHeader, CardTitle, Textarea } from "@plumas/ui";
-import type { PostCategory } from "@plumas/validators";
-import { postCategories } from "@plumas/validators";
+import type { PostCategory, ReactionType } from "@plumas/validators";
+import { postCategories, reactionTypes } from "@plumas/validators";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { CircleUserRound, Pencil, Pin, PinOff, Trash2 } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { mediaUrl, uploadImage } from "../../lib/upload-image";
+import {
+  createCommentFn,
+  deleteCommentFn,
+  getComments,
+  removeReactionFn,
+  setReactionFn,
+  updateCommentFn,
+} from "../../server/functions/comments";
 import {
   createPostFn,
   deletePostFn,
@@ -15,6 +23,14 @@ import {
   unpinPostFn,
   updatePostFn,
 } from "../../server/functions/posts";
+
+const reactionEmoji: Record<ReactionType, string> = {
+  like: "👍",
+  love: "❤️",
+  laugh: "😂",
+  sad: "😢",
+  helpful: "🙏",
+};
 
 export const Route = createFileRoute("/_app/feed")({
   loader: async () => getFeed({ data: { limit: 20 } }),
@@ -39,6 +55,21 @@ interface FeedPostData {
   authorDisplayName: string;
   authorAvatarKey: string | null;
   media: { id: string; r2Key: string; width: number; height: number }[];
+  reactionCounts: Record<ReactionType, number>;
+  myReaction: ReactionType | null;
+  commentCount: number;
+}
+
+interface CommentData {
+  id: string;
+  body: string;
+  parentId: string | null;
+  createdAt: Date;
+  editedAt: Date | null;
+  deletedAt: Date | null;
+  authorId: string;
+  authorDisplayName: string;
+  authorAvatarKey: string | null;
 }
 
 function Feed() {
@@ -403,7 +434,343 @@ function PostCard({
           </div>
         ) : null}
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
+        <ReactionBar post={post} onChanged={onChanged} />
+        <CommentsSection
+          postId={post.id}
+          commentCount={post.commentCount}
+          currentUserId={currentUserId}
+          onCountChanged={onChanged}
+        />
       </CardContent>
     </Card>
+  );
+}
+
+function ReactionBar({ post, onChanged }: { post: FeedPostData; onChanged: () => Promise<void> }) {
+  const doSetReaction = useServerFn(setReactionFn);
+  const doRemoveReaction = useServerFn(removeReactionFn);
+  const [busy, setBusy] = useState(false);
+
+  function react(type: ReactionType) {
+    if (busy) return;
+    setBusy(true);
+    const action =
+      post.myReaction === type
+        ? doRemoveReaction({ data: { postId: post.id } })
+        : doSetReaction({ data: { postId: post.id, type } });
+    void action.then(onChanged).finally(() => {
+      setBusy(false);
+    });
+  }
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {reactionTypes.map((type) => (
+        <button
+          key={type}
+          type="button"
+          disabled={busy}
+          onClick={() => {
+            react(type);
+          }}
+          className={`flex items-center gap-1 rounded-full border px-2 py-1 text-xs ${
+            post.myReaction === type
+              ? "border-primary bg-primary/10 text-primary"
+              : "border-border text-muted-foreground"
+          }`}
+        >
+          <span>{reactionEmoji[type]}</span>
+          {post.reactionCounts[type] > 0 ? <span>{post.reactionCounts[type]}</span> : null}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function CommentsSection({
+  postId,
+  commentCount,
+  currentUserId,
+  onCountChanged,
+}: {
+  postId: string;
+  commentCount: number;
+  currentUserId: string;
+  onCountChanged: () => Promise<void>;
+}) {
+  const doGetComments = useServerFn(getComments);
+  const doCreateComment = useServerFn(createCommentFn);
+  const doUpdateComment = useServerFn(updateCommentFn);
+  const doDeleteComment = useServerFn(deleteCommentFn);
+
+  const [expanded, setExpanded] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [comments, setComments] = useState<CommentData[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [newBody, setNewBody] = useState("");
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
+  const [replyBody, setReplyBody] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState("");
+
+  async function refreshComments() {
+    const rows = await doGetComments({ data: { postId } });
+    setComments(rows);
+  }
+
+  async function toggleExpanded() {
+    if (expanded) {
+      setExpanded(false);
+      return;
+    }
+    setExpanded(true);
+    if (comments) return;
+    setLoading(true);
+    setError(null);
+    try {
+      await refreshComments();
+    } catch (toggleError) {
+      setError(toggleError instanceof Error ? toggleError.message : "Could not load comments.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function submitComment(parentId?: string) {
+    const body = parentId ? replyBody : newBody;
+    if (!body.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await doCreateComment({ data: { postId, body, parentId } });
+      if (parentId) {
+        setReplyBody("");
+        setReplyingTo(null);
+      } else {
+        setNewBody("");
+      }
+      await refreshComments();
+      await onCountChanged();
+    } catch (createError) {
+      setError(createError instanceof Error ? createError.message : "Could not post comment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveEdit(commentId: string) {
+    if (!editBody.trim()) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await doUpdateComment({ data: { commentId, body: editBody } });
+      setEditingId(null);
+      await refreshComments();
+    } catch (updateError) {
+      setError(updateError instanceof Error ? updateError.message : "Could not save changes.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeComment(commentId: string) {
+    setBusy(true);
+    setError(null);
+    try {
+      await doDeleteComment({ data: { commentId } });
+      await refreshComments();
+      await onCountChanged();
+    } catch (deleteError) {
+      setError(deleteError instanceof Error ? deleteError.message : "Could not delete comment.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const repliesByParent = new Map<string, CommentData[]>();
+  for (const comment of comments ?? []) {
+    if (comment.parentId) {
+      const list = repliesByParent.get(comment.parentId) ?? [];
+      list.push(comment);
+      repliesByParent.set(comment.parentId, list);
+    }
+  }
+  const topLevel = (comments ?? []).filter((comment) => !comment.parentId);
+
+  function renderComment(comment: CommentData, isReply: boolean) {
+    const isOwner = comment.authorId === currentUserId;
+    const isDeleted = comment.deletedAt !== null;
+
+    return (
+      <div
+        key={comment.id}
+        className={isReply ? "ml-8 flex flex-col gap-1" : "flex flex-col gap-1"}
+      >
+        <div className="flex items-center gap-2">
+          <p className="text-xs font-medium">{comment.authorDisplayName}</p>
+          <p className="text-xs text-muted-foreground">
+            {comment.createdAt.toLocaleString()}
+            {comment.editedAt ? " · edited" : null}
+          </p>
+        </div>
+        {editingId === comment.id ? (
+          <div className="flex flex-col gap-1">
+            <Textarea
+              maxLength={2000}
+              value={editBody}
+              onChange={(event) => {
+                setEditBody(event.target.value);
+              }}
+            />
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy || !editBody.trim()}
+                onClick={() => {
+                  void saveEdit(comment.id);
+                }}
+              >
+                Save
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEditingId(null);
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p
+            className={
+              isDeleted ? "text-sm italic text-muted-foreground" : "whitespace-pre-wrap text-sm"
+            }
+          >
+            {isDeleted ? "This comment was deleted." : comment.body}
+          </p>
+        )}
+        {!isDeleted && editingId !== comment.id ? (
+          <div className="flex gap-3 text-xs text-muted-foreground">
+            {!isReply ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setReplyingTo(comment.id);
+                  setReplyBody("");
+                }}
+              >
+                Reply
+              </button>
+            ) : null}
+            {isOwner ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingId(comment.id);
+                    setEditBody(comment.body);
+                  }}
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void removeComment(comment.id);
+                  }}
+                >
+                  Delete
+                </button>
+              </>
+            ) : null}
+          </div>
+        ) : null}
+        {!isReply && replyingTo === comment.id ? (
+          <div className="ml-8 mt-1 flex flex-col gap-1">
+            <Textarea
+              maxLength={2000}
+              placeholder="Write a reply..."
+              value={replyBody}
+              onChange={(event) => {
+                setReplyBody(event.target.value);
+              }}
+            />
+            <div className="flex gap-2">
+              <Button
+                type="button"
+                size="sm"
+                disabled={busy || !replyBody.trim()}
+                onClick={() => {
+                  void submitComment(comment.id);
+                }}
+              >
+                Reply
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setReplyingTo(null);
+                  setReplyBody("");
+                }}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        ) : null}
+        {!isReply
+          ? (repliesByParent.get(comment.id) ?? []).map((reply) => renderComment(reply, true))
+          : null}
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 border-t border-border pt-3">
+      <button
+        type="button"
+        className="text-left text-xs text-muted-foreground"
+        onClick={() => {
+          void toggleExpanded();
+        }}
+      >
+        💬 {commentCount} {commentCount === 1 ? "comment" : "comments"}
+      </button>
+      {expanded ? (
+        <div className="flex flex-col gap-3">
+          {loading ? <p className="text-xs text-muted-foreground">Loading...</p> : null}
+          {topLevel.map((comment) => renderComment(comment, false))}
+          {error ? <p className="text-sm text-destructive">{error}</p> : null}
+          <div className="flex flex-col gap-1">
+            <Textarea
+              maxLength={2000}
+              placeholder="Add a comment..."
+              value={newBody}
+              onChange={(event) => {
+                setNewBody(event.target.value);
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              disabled={busy || !newBody.trim()}
+              onClick={() => {
+                void submitComment();
+              }}
+            >
+              Comment
+            </Button>
+          </div>
+        </div>
+      ) : null}
+    </div>
   );
 }

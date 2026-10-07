@@ -1,8 +1,11 @@
 import { type Database, schema } from "@plumas/db";
-import type { PostCategory } from "@plumas/validators";
+import type { PostCategory, ReactionType } from "@plumas/validators";
+import { reactionTypes } from "@plumas/validators";
 import { and, count, desc, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 
-const { media, posts, users } = schema;
+import { countCommentsForPosts } from "./comment-service";
+
+const { media, posts, reactions, users } = schema;
 
 export class PostNotFoundError extends Error {
   constructor(message = "That post no longer exists.") {
@@ -31,6 +34,12 @@ export interface PostMediaItem {
   height: number;
 }
 
+export type ReactionCounts = Record<ReactionType, number>;
+
+function emptyReactionCounts(): ReactionCounts {
+  return Object.fromEntries(reactionTypes.map((type) => [type, 0])) as ReactionCounts;
+}
+
 export interface FeedPost {
   id: string;
   body: string;
@@ -42,6 +51,9 @@ export interface FeedPost {
   authorDisplayName: string;
   authorAvatarKey: string | null;
   media: PostMediaItem[];
+  reactionCounts: ReactionCounts;
+  myReaction: ReactionType | null;
+  commentCount: number;
 }
 
 async function attachMedia(
@@ -71,6 +83,30 @@ async function attachMedia(
   return map;
 }
 
+/** Bulk reaction counts-per-type and the viewer's own reaction per post - one query, grouped in JS, never N+1. */
+async function attachReactions(
+  database: Database,
+  postIds: readonly string[],
+  viewerId: string,
+): Promise<{ counts: Map<string, ReactionCounts>; mine: Map<string, ReactionType> }> {
+  const counts = new Map<string, ReactionCounts>();
+  const mine = new Map<string, ReactionType>();
+  if (postIds.length === 0) return { counts, mine };
+
+  const rows = await database
+    .select({ targetId: reactions.targetId, userId: reactions.userId, type: reactions.type })
+    .from(reactions)
+    .where(and(eq(reactions.targetType, "post"), inArray(reactions.targetId, [...postIds])));
+
+  for (const row of rows) {
+    const entry = counts.get(row.targetId) ?? emptyReactionCounts();
+    entry[row.type] += 1;
+    counts.set(row.targetId, entry);
+    if (row.userId === viewerId) mine.set(row.targetId, row.type);
+  }
+  return { counts, mine };
+}
+
 function toFeedPost(
   row: {
     id: string;
@@ -84,11 +120,17 @@ function toFeedPost(
     authorAvatarKey: string | null;
   },
   mediaMap: Map<string, PostMediaItem[]>,
+  reactionCountsMap: Map<string, ReactionCounts>,
+  myReactionMap: Map<string, ReactionType>,
+  commentCountMap: Map<string, number>,
 ): FeedPost {
   return {
     ...row,
     category: row.category as PostCategory | null,
     media: mediaMap.get(row.id) ?? [],
+    reactionCounts: reactionCountsMap.get(row.id) ?? emptyReactionCounts(),
+    myReaction: myReactionMap.get(row.id) ?? null,
+    commentCount: commentCountMap.get(row.id) ?? 0,
   };
 }
 
@@ -154,6 +196,7 @@ export async function getOwnedPost(database: Database, postId: string, authorId:
 export interface ListFeedPostsInput {
   cursor?: string | undefined;
   limit: number;
+  viewerId: string;
 }
 
 export interface FeedPage {
@@ -164,7 +207,7 @@ export interface FeedPage {
 /** FR-FEED-02: reverse-chronological, cursor-paginated. Pinned posts are excluded here - they're a separate query, only prepended on the first page. */
 export async function listFeedPosts(
   database: Database,
-  { cursor, limit }: ListFeedPostsInput,
+  { cursor, limit, viewerId }: ListFeedPostsInput,
 ): Promise<FeedPage> {
   const conditions = [
     eq(posts.contextType, "feed"),
@@ -194,17 +237,22 @@ export async function listFeedPosts(
 
   const hasMore = rows.length > limit;
   const page = hasMore ? rows.slice(0, limit) : rows;
-  const mediaMap = await attachMedia(database, page);
+  const postIds = page.map((row) => row.id);
+  const [mediaMap, { counts, mine }, commentCountMap] = await Promise.all([
+    attachMedia(database, page),
+    attachReactions(database, postIds, viewerId),
+    countCommentsForPosts(database, postIds),
+  ]);
   const lastRow = page[page.length - 1];
 
   return {
-    items: page.map((row) => toFeedPost(row, mediaMap)),
+    items: page.map((row) => toFeedPost(row, mediaMap, counts, mine, commentCountMap)),
     nextCursor: hasMore && lastRow ? lastRow.createdAt.toISOString() : null,
   };
 }
 
 /** FR-FEED-07: at most 3, newest-pinned first. Fetched fresh every time, not paginated. */
-export async function listPinnedPosts(database: Database): Promise<FeedPost[]> {
+export async function listPinnedPosts(database: Database, viewerId: string): Promise<FeedPost[]> {
   const rows = await database
     .select({
       id: posts.id,
@@ -223,8 +271,13 @@ export async function listPinnedPosts(database: Database): Promise<FeedPost[]> {
     .orderBy(desc(posts.pinnedAt))
     .limit(MAX_PINNED_POSTS);
 
-  const mediaMap = await attachMedia(database, rows);
-  return rows.map((row) => toFeedPost(row, mediaMap));
+  const postIds = rows.map((row) => row.id);
+  const [mediaMap, { counts, mine }, commentCountMap] = await Promise.all([
+    attachMedia(database, rows),
+    attachReactions(database, postIds, viewerId),
+    countCommentsForPosts(database, postIds),
+  ]);
+  return rows.map((row) => toFeedPost(row, mediaMap, counts, mine, commentCountMap));
 }
 
 async function requireAdmin(database: Database, actingUserId: string) {
@@ -266,4 +319,35 @@ export async function unpinPost(database: Database, postId: string, actingUserId
     .returning();
   if (!row) throw new PostNotFoundError();
   return row;
+}
+
+/** Upsert via the reactions table's unique-per-user index - changing reaction type is an update, not a new row. */
+export async function setPostReaction(
+  database: Database,
+  postId: string,
+  userId: string,
+  type: ReactionType,
+) {
+  const [existingPost] = await database.select().from(posts).where(eq(posts.id, postId));
+  if (!existingPost || existingPost.deletedAt) throw new PostNotFoundError();
+
+  await database
+    .insert(reactions)
+    .values({ targetType: "post", targetId: postId, userId, type })
+    .onConflictDoUpdate({
+      target: [reactions.targetType, reactions.targetId, reactions.userId],
+      set: { type },
+    });
+}
+
+export async function removePostReaction(database: Database, postId: string, userId: string) {
+  await database
+    .delete(reactions)
+    .where(
+      and(
+        eq(reactions.targetType, "post"),
+        eq(reactions.targetId, postId),
+        eq(reactions.userId, userId),
+      ),
+    );
 }

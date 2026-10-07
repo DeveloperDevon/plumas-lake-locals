@@ -1,3 +1,4 @@
+export * from "./comment-service";
 export * from "./config";
 export * from "./invite-service";
 export * from "./media-service";

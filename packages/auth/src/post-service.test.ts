@@ -10,6 +10,8 @@ import {
   PostForbiddenError,
   PostNotFoundError,
   PostPinLimitError,
+  removePostReaction,
+  setPostReaction,
   unpinPost,
   updatePost,
 } from "./post-service";
@@ -45,13 +47,15 @@ describe("post-service (integration, against the real local Postgres)", () => {
     expect(post.category).toBeNull();
     expect(post.pinnedAt).toBeNull();
 
-    const { items } = await listFeedPosts(db, { limit: 20 });
+    const { items } = await listFeedPosts(db, { limit: 20, viewerId: author.id });
     const found = items.find((item) => item.id === post.id);
     expect(found).toMatchObject({
       body: "Hello neighbors",
       authorId: author.id,
       authorDisplayName: author.displayName,
       media: [],
+      myReaction: null,
+      commentCount: 0,
     });
   });
 
@@ -63,7 +67,7 @@ describe("post-service (integration, against the real local Postgres)", () => {
       created.push(post.id);
     }
 
-    const firstPage = await listFeedPosts(db, { limit: 2 });
+    const firstPage = await listFeedPosts(db, { limit: 2, viewerId: author.id });
     expect(firstPage.items).toHaveLength(2);
     expect(firstPage.nextCursor).not.toBeNull();
     // Newest first - the last-created post should be first.
@@ -72,6 +76,7 @@ describe("post-service (integration, against the real local Postgres)", () => {
     const secondPage = await listFeedPosts(db, {
       limit: 2,
       cursor: firstPage.nextCursor ?? undefined,
+      viewerId: author.id,
     });
     expect(secondPage.items).toHaveLength(2);
     const firstPageIds = new Set(firstPage.items.map((item) => item.id));
@@ -101,7 +106,7 @@ describe("post-service (integration, against the real local Postgres)", () => {
 
     await deletePost(db, post.id, author.id);
 
-    const { items } = await listFeedPosts(db, { limit: 20 });
+    const { items } = await listFeedPosts(db, { limit: 20, viewerId: author.id });
     expect(items.some((item) => item.id === post.id)).toBe(false);
 
     await expect(deletePost(db, post.id, author.id)).rejects.toThrow(PostNotFoundError);
@@ -117,14 +122,14 @@ describe("post-service (integration, against the real local Postgres)", () => {
     const pinned = await pinPost(db, post.id, admin.id);
     expect(pinned.pinnedAt).not.toBeNull();
 
-    const { items } = await listFeedPosts(db, { limit: 20 });
+    const { items } = await listFeedPosts(db, { limit: 20, viewerId: admin.id });
     expect(items.some((item) => item.id === post.id)).toBe(false);
 
-    const pinnedList = await listPinnedPosts(db);
+    const pinnedList = await listPinnedPosts(db, admin.id);
     expect(pinnedList.some((item) => item.id === post.id)).toBe(true);
 
     await unpinPost(db, post.id, admin.id);
-    const { items: itemsAfterUnpin } = await listFeedPosts(db, { limit: 20 });
+    const { items: itemsAfterUnpin } = await listFeedPosts(db, { limit: 20, viewerId: admin.id });
     expect(itemsAfterUnpin.some((item) => item.id === post.id)).toBe(true);
   });
 
@@ -156,5 +161,31 @@ describe("post-service (integration, against the real local Postgres)", () => {
     await expect(pinPost(db, post.id, admin.id)).resolves.toMatchObject({ id: post.id });
 
     await unpinPost(db, post.id, admin.id);
+  });
+
+  it("reacting to a post is reflected in counts and the viewer's own reaction, and changing it updates rather than adding", async () => {
+    const author = await makeMember();
+    const reactor = await makeMember();
+    const post = await createPost(db, { authorId: author.id, body: "React to this" });
+
+    await setPostReaction(db, post.id, reactor.id, "like");
+    const { items: afterLike } = await listFeedPosts(db, { limit: 20, viewerId: reactor.id });
+    const likedPost = afterLike.find((item) => item.id === post.id);
+    expect(likedPost?.reactionCounts.like).toBe(1);
+    expect(likedPost?.myReaction).toBe("like");
+
+    // Changing reaction type is an update, not a new row - the like count drops back to 0.
+    await setPostReaction(db, post.id, reactor.id, "love");
+    const { items: afterLove } = await listFeedPosts(db, { limit: 20, viewerId: reactor.id });
+    const lovedPost = afterLove.find((item) => item.id === post.id);
+    expect(lovedPost?.reactionCounts.like).toBe(0);
+    expect(lovedPost?.reactionCounts.love).toBe(1);
+    expect(lovedPost?.myReaction).toBe("love");
+
+    await removePostReaction(db, post.id, reactor.id);
+    const { items: afterRemove } = await listFeedPosts(db, { limit: 20, viewerId: reactor.id });
+    const clearedPost = afterRemove.find((item) => item.id === post.id);
+    expect(clearedPost?.reactionCounts.love).toBe(0);
+    expect(clearedPost?.myReaction).toBeNull();
   });
 });

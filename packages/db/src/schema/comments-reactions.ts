@@ -16,6 +16,7 @@ export const comments = pgTable(
     parentId: uuid("parent_id"),
     body: text("body").notNull(),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    editedAt: timestamp("edited_at", { withTimezone: true }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
   },
   (t) => [index("comments_target_idx").on(t.targetType, t.targetId, t.createdAt)],
