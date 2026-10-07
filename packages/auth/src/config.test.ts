@@ -4,6 +4,7 @@ import { beforeAll, describe, expect, it, vi } from "vitest";
 
 import { createAuth } from "./config";
 import { acceptInvite, createInvite } from "./invite-service";
+import { setUserTheme } from "./theme-service";
 
 const { invites, users } = schema;
 
@@ -140,6 +141,32 @@ describe("betterAuth config (integration, against the real local Postgres)", () 
         headers: sessionHeaders,
       }),
     ).rejects.toThrow();
+  });
+
+  it("getSession reflects a theme set via setUserTheme, with no extra query (additionalFields)", async () => {
+    const email = uniqueEmail("theme-pref");
+    const [user] = await db.insert(users).values({ email, displayName: "Theme Test" }).returning();
+    if (!user) throw new Error("setup failed");
+    expect(user.theme).toBe("system"); // the column's own default
+
+    await setUserTheme(db, user.id, "dark");
+
+    await auth.api.signInMagicLink({ body: { email }, headers: new Headers() });
+    const logSpy = vi.mocked(console.log);
+    const logged = logSpy.mock.calls.map((call) => String(call[0])).join("\n");
+    const token = /token=([A-Za-z0-9_-]+)/.exec(logged.slice(logged.lastIndexOf(email)))?.[1];
+    if (!token) throw new Error("couldn't find the magic-link token in the captured log output");
+
+    const verifyResponse = await auth.api.magicLinkVerify({
+      query: { token },
+      headers: new Headers(),
+      asResponse: true,
+    });
+    const cookie = verifyResponse.headers.get("set-cookie");
+    if (!cookie) throw new Error("sign-in didn't set a session cookie");
+
+    const session = await auth.api.getSession({ headers: new Headers({ cookie }) });
+    expect(session?.user.theme).toBe("dark");
   });
 
   it("rejects account creation through Better Auth's own sign-up-with-password path", async () => {

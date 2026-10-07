@@ -148,7 +148,7 @@ function AcceptInvite() {
               <Label htmlFor="isAdult">I am 18 or older</Label>
             </div>
             {state.status === "error" ? (
-              <p className="text-sm text-red-600">{state.message}</p>
+              <p className="text-sm text-destructive">{state.message}</p>
             ) : null}
             <Button type="submit" disabled={!isAdult || state.status === "submitting"}>
               {state.status === "submitting" ? "Joining..." : "Create account"}

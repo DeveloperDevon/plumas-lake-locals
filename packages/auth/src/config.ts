@@ -50,6 +50,17 @@ export function createAuth() {
       fields: {
         name: "displayName",
       },
+      additionalFields: {
+        // Not part of Better Auth's own model (same as bio/avatarKey) - declared here purely
+        // so getSession()'s user object includes it for free, no second query per request.
+        // input:false because it's never set at sign-up/sign-in time, only via setTheme.
+        theme: {
+          type: "string",
+          required: false,
+          input: false,
+          defaultValue: "system",
+        },
+      },
     },
     session: {
       expiresIn: 60 * 60 * 24 * 30, // 30 days

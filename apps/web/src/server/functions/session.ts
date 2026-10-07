@@ -1,9 +1,10 @@
-import { createAuth, hasPasswordCredential } from "@plumas/auth";
-import { setPasswordSchema } from "@plumas/validators";
+import { createAuth, hasPasswordCredential, setUserTheme } from "@plumas/auth";
+import { setPasswordSchema, setThemeSchema } from "@plumas/validators";
 import { createServerFn } from "@tanstack/react-start";
 import { getRequest } from "@tanstack/react-start/server";
 import { APIError } from "better-auth";
 
+import { requireUser } from "../auth";
 import { getDb } from "../db";
 
 /**
@@ -47,4 +48,17 @@ export const setPassword = createServerFn({ method: "POST" })
       }
       throw error;
     }
+  });
+
+/**
+ * Written directly via Drizzle (theme-service.ts), not Better Auth's updateUser - `theme` is
+ * declared input:false (packages/auth/src/config.ts) specifically so it can't be set through
+ * that public endpoint, only here, scoped to the caller's own session user id.
+ */
+export const setTheme = createServerFn({ method: "POST" })
+  .validator(setThemeSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    await setUserTheme(getDb(), user.id, data.theme);
+    return { ok: true as const };
   });

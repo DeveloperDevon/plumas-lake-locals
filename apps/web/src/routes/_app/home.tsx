@@ -1,5 +1,5 @@
 import { Button, Card, CardContent, CardHeader, CardTitle, Input, Label } from "@plumas/ui";
-import { createFileRoute, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 
@@ -59,14 +59,19 @@ function Home() {
     <main className="mx-auto flex min-h-screen max-w-xl flex-col gap-6 p-6">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">Welcome, {user.name}</h1>
-        <Button
-          variant="outline"
-          onClick={() => {
-            void doSignOut().then(() => router.navigate({ to: "/sign-in" }));
-          }}
-        >
-          Sign out
-        </Button>
+        <div className="flex gap-2">
+          <Link to="/settings">
+            <Button variant="outline">Settings</Button>
+          </Link>
+          <Button
+            variant="outline"
+            onClick={() => {
+              void doSignOut().then(() => router.navigate({ to: "/sign-in" }));
+            }}
+          >
+            Sign out
+          </Button>
+        </div>
       </div>
 
       {hasPassword ? null : (
@@ -125,7 +130,7 @@ function Home() {
                 />
               </div>
               {passwordState.status === "error" ? (
-                <p className="text-sm text-red-600">{passwordState.message}</p>
+                <p className="text-sm text-destructive">{passwordState.message}</p>
               ) : null}
               <Button type="submit" disabled={passwordState.status === "submitting"}>
                 {passwordState.status === "submitting" ? "Saving..." : "Set password"}
@@ -191,7 +196,7 @@ function Home() {
         </CardHeader>
         <CardContent>
           {invites.length === 0 ? (
-            <p className="text-sm text-slate-500">No invites sent yet.</p>
+            <p className="text-sm text-muted-foreground">No invites sent yet.</p>
           ) : (
             <ul className="flex flex-col gap-3">
               {invites.map((invite) => {
@@ -200,7 +205,7 @@ function Home() {
                   <li key={invite.id} className="flex items-center justify-between gap-2 text-sm">
                     <div>
                       <p className="font-medium">{invite.email}</p>
-                      <p className="text-slate-500">{status}</p>
+                      <p className="text-muted-foreground">{status}</p>
                     </div>
                     {status === "pending" ? (
                       <div className="flex gap-2">

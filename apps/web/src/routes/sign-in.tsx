@@ -81,13 +81,13 @@ function SignIn() {
               />
             </div>
             {status.kind === "error" ? (
-              <p className="text-sm text-red-600">{status.message}</p>
+              <p className="text-sm text-destructive">{status.message}</p>
             ) : null}
             <Button type="submit" disabled={status.kind === "signing-in"}>
               {status.kind === "signing-in" ? "Signing in..." : "Sign in"}
             </Button>
             {status.kind === "link-sent" ? (
-              <p className="text-sm text-slate-600">
+              <p className="text-sm text-muted-foreground">
                 If that email has an account, a sign-in link is on its way.
               </p>
             ) : (

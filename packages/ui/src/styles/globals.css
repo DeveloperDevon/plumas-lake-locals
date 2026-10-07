@@ -13,10 +13,105 @@
 
 @theme {
   --radius-md: 0.5rem;
+
+  /*
+   * Semantic color tokens (shadcn's convention), each backed by a CSS variable so a theme is
+   * just a set of variable values, not a set of classes - components use bg-background,
+   * text-foreground, etc. throughout, never a raw Tailwind color. Values themselves are
+   * defined below per data-theme (see docs/adr on theming); @theme only needs to *name* them
+   * once for Tailwind to generate the matching utility classes.
+   */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+}
+
+/*
+ * Theme values. Light is the unmarked default (bare :root); dark applies either from an
+ * explicit choice (html[data-theme="dark"], set server-side in apps/web's __root.tsx from the
+ * signed-in user's persisted preference - never client-only) or from the OS when no explicit
+ * choice overrides it (:root:not([data-theme="light"]) under the media query - "system" never
+ * stamps an attribute at all, so it falls through to here). An explicit light choice
+ * (html[data-theme="light"]) wins over a dark OS preference by repeating the light values
+ * under that same attribute, after the media-query block, so source order can't flip it.
+ */
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a; /* slate-900 */
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --primary: #0f172a;
+  --primary-foreground: #f8fafc; /* slate-50 */
+  --muted: #f1f5f9; /* slate-100 */
+  --muted-foreground: #64748b; /* slate-500 */
+  --border: #e2e8f0; /* slate-200 */
+  --ring: #94a3b8; /* slate-400 */
+  --destructive: #dc2626; /* red-600 */
+  --destructive-foreground: #f8fafc;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --background: #020617; /* slate-950 */
+    --foreground: #f8fafc;
+    --card: #0f172a; /* slate-900 */
+    --card-foreground: #f8fafc;
+    --primary: #f8fafc;
+    --primary-foreground: #0f172a;
+    --muted: #1e293b; /* slate-800 */
+    --muted-foreground: #94a3b8; /* slate-400 */
+    --border: #1e293b;
+    --ring: #475569; /* slate-600 */
+    --destructive: #ef4444; /* red-500, more legible on a dark background */
+    --destructive-foreground: #f8fafc;
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme="dark"] {
+  --background: #020617;
+  --foreground: #f8fafc;
+  --card: #0f172a;
+  --card-foreground: #f8fafc;
+  --primary: #f8fafc;
+  --primary-foreground: #0f172a;
+  --muted: #1e293b;
+  --muted-foreground: #94a3b8;
+  --border: #1e293b;
+  --ring: #475569;
+  --destructive: #ef4444;
+  --destructive-foreground: #f8fafc;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --primary: #0f172a;
+  --primary-foreground: #f8fafc;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --border: #e2e8f0;
+  --ring: #94a3b8;
+  --destructive: #dc2626;
+  --destructive-foreground: #f8fafc;
+  color-scheme: light;
 }
 
 @layer base {
   body {
-    @apply bg-white text-slate-900 antialiased;
+    @apply bg-background text-foreground antialiased;
   }
 }

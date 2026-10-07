@@ -1,7 +1,7 @@
 import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { boolean, index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
-import { userRoleEnum, userStatusEnum } from "./enums";
+import { themeEnum, userRoleEnum, userStatusEnum } from "./enums";
 
 export const users = pgTable(
   "users",
@@ -20,6 +20,10 @@ export const users = pgTable(
     invitedBy: uuid("invited_by").references((): AnyPgColumn => users.id),
     role: userRoleEnum("role").notNull().default("member"),
     status: userStatusEnum("status").notNull().default("active"),
+    // UI color theme (VS Code-style: a named choice, not just light/dark), declared to Better
+    // Auth via user.additionalFields (packages/auth/src/config.ts) so getSession() returns it
+    // without a second query.
+    theme: themeEnum("theme").notNull().default("system"),
     // FR-INV-11: stores only the attestation timestamp — no date of birth is ever collected.
     ageAttestedAt: timestamp("age_attested_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

@@ -1,8 +1,12 @@
-import { relationshipStatuses, relationshipTypes } from "@plumas/validators";
+import { relationshipStatuses, relationshipTypes, themes } from "@plumas/validators";
 import { pgEnum } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["member", "admin"]);
 export const userStatusEnum = pgEnum("user_status", ["active", "suspended"]);
+
+// Generated from @plumas/validators' canonical list, same reasoning as relationshipTypeEnum
+// below: the zod schema and the database enum can never drift apart.
+export const themeEnum = pgEnum("theme", [...themes]);
 
 // Generated from @plumas/validators' canonical list so the app's zod schema and the
 // database enum can never drift apart (see docs/adr/0002 and the PRD discrepancy note).
