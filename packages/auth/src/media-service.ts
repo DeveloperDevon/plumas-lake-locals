@@ -1,5 +1,5 @@
 import { type Database, schema } from "@plumas/db";
-import { desc, eq } from "drizzle-orm";
+import { count, desc, eq } from "drizzle-orm";
 
 const { media, users } = schema;
 
@@ -12,15 +12,25 @@ export interface CreateMediaInput {
   width: number;
   height: number;
   albumId?: string | null;
+  postId?: string | null;
 }
 
 export async function createMedia(database: Database, input: CreateMediaInput) {
   const [row] = await database
     .insert(media)
-    .values({ ...input, albumId: input.albumId ?? null })
+    .values({ ...input, albumId: input.albumId ?? null, postId: input.postId ?? null })
     .returning();
   if (!row) throw new Error("Failed to create media row");
   return row;
+}
+
+/** FR-FEED-01: the upload route's 10-image-per-post cap. */
+export async function countPostMedia(database: Database, postId: string): Promise<number> {
+  const [row] = await database
+    .select({ value: count() })
+    .from(media)
+    .where(eq(media.postId, postId));
+  return row?.value ?? 0;
 }
 
 /** Scoped to userId by every caller - never a client-supplied id. */

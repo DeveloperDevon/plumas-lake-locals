@@ -31,13 +31,15 @@ export interface UploadResult {
 
 export async function uploadImage(
   file: File,
-  purpose: "avatar" | "cover" | "gallery",
+  purpose: "avatar" | "cover" | "gallery" | "post",
+  postId?: string,
 ): Promise<UploadResult> {
   const prepared = await prepareImageFile(file);
 
   const form = new FormData();
   form.append("file", prepared);
   form.append("purpose", purpose);
+  if (postId) form.append("postId", postId);
 
   const response = await fetch("/api/media/upload", { method: "POST", body: form });
   const result: unknown = await response.json();

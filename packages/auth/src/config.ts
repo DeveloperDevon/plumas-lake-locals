@@ -60,6 +60,15 @@ export function createAuth() {
           input: false,
           defaultValue: "system",
         },
+        // Same reasoning - UI-only (e.g. showing the pin/unpin button on a post). Every
+        // actual admin-gated write (pinPost/unpinPost, etc.) re-checks the real row itself,
+        // never trusts this cached session value as the security boundary.
+        role: {
+          type: "string",
+          required: false,
+          input: false,
+          defaultValue: "member",
+        },
       },
     },
     session: {

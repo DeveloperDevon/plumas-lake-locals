@@ -1,4 +1,9 @@
-import { relationshipStatuses, relationshipTypes, themes } from "@plumas/validators";
+import {
+  postCategories,
+  relationshipStatuses,
+  relationshipTypes,
+  themes,
+} from "@plumas/validators";
 import { pgEnum } from "drizzle-orm/pg-core";
 
 export const userRoleEnum = pgEnum("user_role", ["member", "admin"]);
@@ -24,6 +29,9 @@ export const groupMemberStatusEnum = pgEnum("group_member_status", [
 export const businessManagerRoleEnum = pgEnum("business_manager_role", ["owner", "manager"]);
 
 export const postContextTypeEnum = pgEnum("post_context_type", ["feed", "group", "business"]);
+
+// Generated from @plumas/validators' canonical list, same reasoning as themeEnum above.
+export const postCategoryEnum = pgEnum("post_category", [...postCategories]);
 
 export const listingKindEnum = pgEnum("listing_kind", ["item", "service"]);
 export const listingTypeEnum = pgEnum("listing_type", ["sale", "free", "wanted"]);

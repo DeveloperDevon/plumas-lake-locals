@@ -1,6 +1,15 @@
-import { createMedia, setUserAvatar, setUserCover } from "@plumas/auth";
-import { MAX_UPLOAD_BYTES, mediaPurposeSchema } from "@plumas/validators";
+import {
+  countPostMedia,
+  createMedia,
+  getOwnedPost,
+  PostForbiddenError,
+  PostNotFoundError,
+  setUserAvatar,
+  setUserCover,
+} from "@plumas/auth";
+import { MAX_POST_IMAGES, MAX_UPLOAD_BYTES, mediaPurposeSchema } from "@plumas/validators";
 import { createFileRoute } from "@tanstack/react-router";
+import { z } from "zod";
 
 import { requireUser } from "../../../server/auth";
 import { getDb } from "../../../server/db";
@@ -33,6 +42,36 @@ export const Route = createFileRoute("/api/media/upload")({
           return Response.json({ ok: false, message: "Invalid upload purpose." }, { status: 400 });
         }
         const purpose = purposeResult.data;
+        const db = getDb();
+
+        // Checked before the (comparatively expensive) image processing step, so a doomed
+        // upload fails fast rather than burning Photon CPU time first.
+        let postId: string | undefined;
+        if (purpose === "post") {
+          const postIdResult = z.string().uuid().safeParse(form.get("postId"));
+          if (!postIdResult.success) {
+            return Response.json({ ok: false, message: "Missing postId." }, { status: 400 });
+          }
+          postId = postIdResult.data;
+          try {
+            await getOwnedPost(db, postId, user.id);
+          } catch (error) {
+            if (error instanceof PostNotFoundError || error instanceof PostForbiddenError) {
+              return Response.json({ ok: false, message: error.message }, { status: 403 });
+            }
+            throw error;
+          }
+          const existingCount = await countPostMedia(db, postId);
+          if (existingCount >= MAX_POST_IMAGES) {
+            return Response.json(
+              {
+                ok: false,
+                message: `A post can have at most ${MAX_POST_IMAGES.toString()} images.`,
+              },
+              { status: 400 },
+            );
+          }
+        }
 
         const bytes = new Uint8Array(await file.arrayBuffer());
         const mediaId = crypto.randomUUID();
@@ -45,13 +84,13 @@ export const Route = createFileRoute("/api/media/upload")({
           return Response.json({ ok: false, message }, { status: 400 });
         }
 
-        const db = getDb();
-        const media = await createMedia(db, {
+        const mediaRow = await createMedia(db, {
           id: mediaId,
           ownerId: user.id,
           r2Key: processed.r2KeyPrefix,
           width: processed.width,
           height: processed.height,
+          postId: postId ?? null,
         });
 
         if (purpose === "avatar") {
@@ -60,7 +99,11 @@ export const Route = createFileRoute("/api/media/upload")({
           await setUserCover(db, user.id, processed.r2KeyPrefix);
         }
 
-        return Response.json({ ok: true, mediaId: media.id, r2KeyPrefix: processed.r2KeyPrefix });
+        return Response.json({
+          ok: true,
+          mediaId: mediaRow.id,
+          r2KeyPrefix: processed.r2KeyPrefix,
+        });
       },
     },
   },
