@@ -47,11 +47,9 @@ describe("DM client engine", () => {
     if (!bobKeyPackage) throw new Error("Expected a generated KeyPackage");
 
     await asAlice();
-    const created = await createConversation(
-      "alice",
-      conversationId,
+    const created = await createConversation("alice", conversationId, [
       bobKeyPackage.publicPackageBytes,
-    );
+    ]);
 
     await asBob();
     const joinResult = await processIncoming("msg-welcome", conversationId, created.welcomeBytes);
@@ -87,11 +85,9 @@ describe("DM client engine", () => {
     if (!bobKeyPackage) throw new Error("Expected a generated KeyPackage");
 
     await asAlice();
-    const created = await createConversation(
-      "alice",
-      conversationId,
+    const created = await createConversation("alice", conversationId, [
       bobKeyPackage.publicPackageBytes,
-    );
+    ]);
     const wireToBob = (await encryptMessage(conversationId, "Hello Bob, this is Alice.")).wireBytes;
 
     await asBob();
@@ -108,11 +104,9 @@ describe("DM client engine", () => {
     if (!bobKeyPackage) throw new Error("Expected a generated KeyPackage");
 
     await asAlice();
-    const created = await createConversation(
-      "alice",
-      conversationId,
+    const created = await createConversation("alice", conversationId, [
       bobKeyPackage.publicPackageBytes,
-    );
+    ]);
 
     await asBob();
     await processIncoming("msg-welcome-1", conversationId, created.welcomeBytes);
@@ -173,11 +167,9 @@ describe("DM client engine", () => {
     if (!bobKeyPackage) throw new Error("Expected a generated KeyPackage");
 
     await asAlice();
-    const created = await createConversation(
-      "alice",
-      conversationId,
+    const created = await createConversation("alice", conversationId, [
       bobKeyPackage.publicPackageBytes,
-    );
+    ]);
 
     await asBob();
     await processIncoming("msg-welcome", conversationId, created.welcomeBytes);
@@ -192,11 +184,9 @@ describe("DM client engine", () => {
     if (!bobKeyPackage) throw new Error("Expected a generated KeyPackage");
 
     await asAlice();
-    const created = await createConversation(
-      "alice",
-      conversationId,
+    const created = await createConversation("alice", conversationId, [
       bobKeyPackage.publicPackageBytes,
-    );
+    ]);
 
     await asBob();
     await processIncoming("msg-welcome-1", conversationId, created.welcomeBytes);

@@ -445,8 +445,25 @@ function FamilyCard({
 
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Family</CardTitle>
+        {isOwner && relationships.length > 0 ? (
+          <Link
+            to="/messages/new"
+            search={{
+              name: "Family",
+              members: JSON.stringify(
+                relationships.map((row) => ({
+                  id: row.otherUserId,
+                  displayName: row.otherDisplayName,
+                })),
+              ),
+            }}
+            className="text-xs font-medium text-primary hover:underline"
+          >
+            Start family chat
+          </Link>
+        ) : null}
       </CardHeader>
       <CardContent className="flex flex-col gap-4 text-sm">
         {relationships.length > 0 ? (

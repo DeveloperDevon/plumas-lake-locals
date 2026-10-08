@@ -36,6 +36,20 @@ export class DmNoKeyPackageError extends Error {
   }
 }
 
+const MAX_GROUP_MEMBERS = 50;
+
+export class DmGroupSizeError extends Error {
+  constructor(message = `Groups can have at most ${String(MAX_GROUP_MEMBERS)} members.`) {
+    super(message);
+  }
+}
+
+export class DmGroupPermissionError extends Error {
+  constructor(message = "Only the group's creator can do that.") {
+    super(message);
+  }
+}
+
 /** FR-DM-21: registers a device's long-term signing key; the client caches the returned id. */
 export async function registerDevice(
   database: Database,
@@ -81,6 +95,28 @@ export async function listDevicesForUser(database: Database, userId: string) {
     .select()
     .from(devices)
     .where(and(eq(devices.userId, userId), isNull(devices.revokedAt)));
+}
+
+/**
+ * Name search over active members, for the group-conversation member picker - the only
+ * existing member lookup (`moderation-service.ts`'s `listMembersForAdmin`) is admin-gated, so
+ * this is a separate, deliberately narrow one (name + id + avatar only) any signed-in member
+ * can use. Excludes the searching member themselves and anyone suspended.
+ */
+export async function searchMembers(database: Database, query: string, excludeUserId: string) {
+  const trimmed = query.trim();
+  if (trimmed.length === 0) return [];
+  return database
+    .select({ id: users.id, displayName: users.displayName, avatarKey: users.avatarKey })
+    .from(users)
+    .where(
+      and(
+        sql`${users.displayName} ilike ${`%${trimmed}%`}`,
+        eq(users.status, "active"),
+        sql`${users.id} != ${excludeUserId}`,
+      ),
+    )
+    .limit(20);
 }
 
 /**
@@ -194,6 +230,258 @@ export async function createDirectConversation(
   }
 }
 
+export interface CreateGroupConversationInput {
+  // Client-generated, same reasoning as CreateDirectConversationInput's conversationId.
+  conversationId: string;
+  creatorId: string;
+  creatorDeviceId: string;
+  name: string;
+  memberUserIds: string[];
+  epoch: number;
+  welcomeBytes: Buffer;
+}
+
+/**
+ * FR-DM-01/12/19: creates a group conversation and stores the one Welcome the creator's client
+ * already produced (@plumas/crypto's `createConversation`, generalized in task #23 to accept
+ * multiple initial members) - same "no commit row" reasoning as `createDirectConversation`: the
+ * creator already has the resulting state, and a single multi-recipient Welcome is all every
+ * invited member needs to join independently. No pair-uniqueness constraint - members can share
+ * more than one group.
+ */
+export async function createGroupConversation(
+  database: Database,
+  input: CreateGroupConversationInput,
+) {
+  if (input.memberUserIds.length === 0) {
+    throw new Error("A group needs at least one other member");
+  }
+  if (input.memberUserIds.includes(input.creatorId)) {
+    throw new DmSelfConversationError();
+  }
+  if (1 + input.memberUserIds.length > MAX_GROUP_MEMBERS) {
+    throw new DmGroupSizeError();
+  }
+
+  const [conversation] = await database
+    .insert(conversations)
+    .values({
+      id: input.conversationId,
+      kind: "group",
+      name: input.name,
+      creatorId: input.creatorId,
+      epoch: input.epoch,
+      lastMessageAt: new Date(),
+    })
+    .returning();
+  if (!conversation) throw new Error("Failed to create group conversation");
+
+  await database.insert(conversationParticipants).values([
+    { conversationId: conversation.id, userId: input.creatorId, status: "active" },
+    ...input.memberUserIds.map((userId) => ({
+      conversationId: conversation.id,
+      userId,
+      status: "active" as const,
+    })),
+  ]);
+
+  await database.insert(messages).values({
+    id: uuidv7(),
+    conversationId: conversation.id,
+    senderDeviceId: input.creatorDeviceId,
+    epoch: input.epoch,
+    ciphertext: input.welcomeBytes,
+  });
+
+  return conversation;
+}
+
+async function requireGroupCreator(database: Database, conversationId: string, userId: string) {
+  const [conversation] = await database
+    .select()
+    .from(conversations)
+    .where(eq(conversations.id, conversationId));
+  if (!conversation) throw new DmNotFoundError();
+  if (conversation.kind !== "group") throw new Error("Not a group conversation");
+  if (conversation.creatorId !== userId) throw new DmGroupPermissionError();
+  return conversation;
+}
+
+export interface AddGroupMemberInput {
+  conversationId: string;
+  actingUserId: string;
+  actingDeviceId: string;
+  newUserId: string;
+  epoch: number;
+  welcomeBytes: Buffer;
+  commitBytes: Buffer;
+}
+
+/**
+ * FR-DM-12: only the creator can add a member. Stores both the Welcome (for the new member to
+ * join from) and the Commit (for every other existing member to advance their epoch) - unlike
+ * group creation, other members already exist here and need it, same reasoning as
+ * `recordDeviceLinkOperations`.
+ */
+export async function addGroupMember(database: Database, input: AddGroupMemberInput) {
+  await requireGroupCreator(database, input.conversationId, input.actingUserId);
+  if (input.newUserId === input.actingUserId) throw new DmSelfConversationError();
+
+  const [countRow] = await database
+    .select({ count: sql<number>`count(*)::int` })
+    .from(conversationParticipants)
+    .where(
+      and(
+        eq(conversationParticipants.conversationId, input.conversationId),
+        eq(conversationParticipants.status, "active"),
+      ),
+    );
+  if ((countRow?.count ?? 0) + 1 > MAX_GROUP_MEMBERS) throw new DmGroupSizeError();
+
+  await database
+    .insert(conversationParticipants)
+    .values({ conversationId: input.conversationId, userId: input.newUserId, status: "active" })
+    .onConflictDoUpdate({
+      target: [conversationParticipants.conversationId, conversationParticipants.userId],
+      set: { status: "active" },
+    });
+
+  await database.insert(messages).values([
+    {
+      id: uuidv7(),
+      conversationId: input.conversationId,
+      senderDeviceId: input.actingDeviceId,
+      epoch: input.epoch,
+      ciphertext: input.welcomeBytes,
+    },
+    {
+      id: uuidv7(),
+      conversationId: input.conversationId,
+      senderDeviceId: input.actingDeviceId,
+      epoch: input.epoch,
+      ciphertext: input.commitBytes,
+    },
+  ]);
+
+  await database
+    .update(conversations)
+    .set({ epoch: input.epoch, lastMessageAt: new Date() })
+    .where(eq(conversations.id, input.conversationId));
+}
+
+export interface RemoveGroupMemberInput {
+  conversationId: string;
+  actingUserId: string;
+  actingDeviceId: string;
+  targetUserId: string;
+  epoch: number;
+  commitBytes: Buffer;
+}
+
+/**
+ * FR-DM-12: removes a member from a group - either the creator removing someone involuntarily,
+ * or any other active member finalizing someone's own prior voluntary departure (see
+ * `requestToLeaveGroup`'s doc comment for why that's two separate steps). No Welcome - nobody
+ * is joining.
+ */
+export async function removeGroupMember(database: Database, input: RemoveGroupMemberInput) {
+  const conversation = await requireActiveParticipant(
+    database,
+    input.conversationId,
+    input.actingUserId,
+  );
+  if (conversation.kind !== "group") throw new Error("Not a group conversation");
+
+  const [target] = await database
+    .select()
+    .from(conversationParticipants)
+    .where(
+      and(
+        eq(conversationParticipants.conversationId, input.conversationId),
+        eq(conversationParticipants.userId, input.targetUserId),
+      ),
+    );
+  const creatorRemovingSomeoneElse =
+    conversation.creatorId === input.actingUserId && input.targetUserId !== input.actingUserId;
+  const finalizingAVoluntaryLeave = target?.status === "left";
+  if (!creatorRemovingSomeoneElse && !finalizingAVoluntaryLeave) {
+    throw new DmGroupPermissionError();
+  }
+
+  await database
+    .update(conversationParticipants)
+    .set({ status: "left" })
+    .where(
+      and(
+        eq(conversationParticipants.conversationId, input.conversationId),
+        eq(conversationParticipants.userId, input.targetUserId),
+      ),
+    );
+
+  await database.insert(messages).values({
+    id: uuidv7(),
+    conversationId: input.conversationId,
+    senderDeviceId: input.actingDeviceId,
+    epoch: input.epoch,
+    ciphertext: input.commitBytes,
+  });
+
+  await database
+    .update(conversations)
+    .set({ epoch: input.epoch })
+    .where(eq(conversations.id, input.conversationId));
+}
+
+/**
+ * FR-DM-12 "any member can leave": a member can't cryptographically remove themselves (ts-mls
+ * rejects a commit that removes its own committer - see @plumas/crypto's `removeGroupMember`
+ * doc comment), so leaving is two steps - this marks the caller's own participation as "left"
+ * immediately (they stop being an active participant, won't be fetched as one going forward);
+ * the actual MLS removal happens the next time any other active member's client notices them in
+ * `listPendingDepartures` and calls `removeGroupMember` on their behalf.
+ */
+export async function requestToLeaveGroup(
+  database: Database,
+  conversationId: string,
+  userId: string,
+) {
+  const conversation = await requireActiveParticipant(database, conversationId, userId);
+  if (conversation.kind !== "group") throw new Error("Not a group conversation");
+
+  await database
+    .update(conversationParticipants)
+    .set({ status: "left" })
+    .where(
+      and(
+        eq(conversationParticipants.conversationId, conversationId),
+        eq(conversationParticipants.userId, userId),
+      ),
+    );
+}
+
+/**
+ * Members who've left (voluntarily or removed) but may not yet be cryptographically excluded -
+ * a client with local state for this group checks this and finalizes via `removeGroupMember`.
+ * It's fine to call that for someone already excluded from the local ratchet tree; the crypto
+ * layer throws cleanly and the caller just ignores it (best-effort cleanup, not a strict
+ * invariant - see @plumas/crypto's `removeGroupMember` doc comment).
+ */
+export async function listPendingDepartures(
+  database: Database,
+  conversationId: string,
+): Promise<string[]> {
+  const rows = await database
+    .select({ userId: conversationParticipants.userId })
+    .from(conversationParticipants)
+    .where(
+      and(
+        eq(conversationParticipants.conversationId, conversationId),
+        eq(conversationParticipants.status, "left"),
+      ),
+    );
+  return rows.map((row) => row.userId);
+}
+
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === "object" && error !== null && "code" in error && error.code === "23505";
 }
@@ -266,13 +554,41 @@ export async function listConversationsForUser(database: Database, userId: strin
 
 export interface ConversationSummary {
   id: string;
+  kind: "direct" | "group";
   lastMessageAt: Date | null;
-  otherUserId: string;
-  otherDisplayName: string;
-  otherAvatarKey: string | null;
+  // Direct: the other person's name/avatar. Group: the group's own name, no avatar concept yet.
+  displayName: string;
+  avatarKey: string | null;
+  // Direct only.
+  otherUserId: string | null;
+  // Group only.
+  memberCount: number | null;
+  // Group only - false for direct conversations, nobody "creates" a 1:1 in that sense.
+  isCreator: boolean;
 }
 
-/** Same ordering as listConversationsForUser, enriched with the other party's profile info. */
+async function activeMemberCounts(
+  database: Database,
+  conversationIds: string[],
+): Promise<Map<string, number>> {
+  if (conversationIds.length === 0) return new Map();
+  const rows = await database
+    .select({
+      conversationId: conversationParticipants.conversationId,
+      count: sql<number>`count(*)::int`,
+    })
+    .from(conversationParticipants)
+    .where(
+      and(
+        inArray(conversationParticipants.conversationId, conversationIds),
+        eq(conversationParticipants.status, "active"),
+      ),
+    )
+    .groupBy(conversationParticipants.conversationId);
+  return new Map(rows.map((row) => [row.conversationId, row.count]));
+}
+
+/** Same ordering as listConversationsForUser, enriched with display info for each kind. */
 export async function listConversationSummariesForUser(
   database: Database,
   userId: string,
@@ -281,9 +597,11 @@ export async function listConversationSummariesForUser(
   if (rows.length === 0) return [];
 
   const otherIds = rows.map((row) =>
-    row.conversation.directUserA === userId
-      ? row.conversation.directUserB
-      : row.conversation.directUserA,
+    row.conversation.kind === "direct"
+      ? row.conversation.directUserA === userId
+        ? row.conversation.directUserB
+        : row.conversation.directUserA
+      : null,
   );
   const otherUsers = await database
     .select({ id: users.id, displayName: users.displayName, avatarKey: users.avatarKey })
@@ -295,27 +613,61 @@ export async function listConversationSummariesForUser(
       ),
     );
   const byId = new Map(otherUsers.map((user) => [user.id, user]));
+  const groupIds = rows
+    .filter((row) => row.conversation.kind === "group")
+    .map((row) => row.conversation.id);
+  const memberCounts = await activeMemberCounts(database, groupIds);
 
   return rows.map((row, index) => {
+    if (row.conversation.kind === "group") {
+      return {
+        id: row.conversation.id,
+        kind: "group" as const,
+        lastMessageAt: row.conversation.lastMessageAt,
+        displayName: row.conversation.name ?? "Unnamed group",
+        avatarKey: null,
+        otherUserId: null,
+        memberCount: memberCounts.get(row.conversation.id) ?? null,
+        isCreator: row.conversation.creatorId === userId,
+      };
+    }
     const otherId = otherIds[index] ?? "";
     const other = byId.get(otherId);
     return {
       id: row.conversation.id,
+      kind: "direct" as const,
       lastMessageAt: row.conversation.lastMessageAt,
+      displayName: other?.displayName ?? "Unknown member",
+      avatarKey: other?.avatarKey ?? null,
       otherUserId: otherId,
-      otherDisplayName: other?.displayName ?? "Unknown member",
-      otherAvatarKey: other?.avatarKey ?? null,
+      memberCount: null,
+      isCreator: false,
     };
   });
 }
 
-/** The other participant's profile info, for a thread's header. */
+/** Display info for a thread's header. */
 export async function getConversationSummary(
   database: Database,
   conversationId: string,
   userId: string,
 ): Promise<ConversationSummary> {
   const conversation = await requireActiveParticipant(database, conversationId, userId);
+
+  if (conversation.kind === "group") {
+    const counts = await activeMemberCounts(database, [conversationId]);
+    return {
+      id: conversation.id,
+      kind: "group",
+      lastMessageAt: conversation.lastMessageAt,
+      displayName: conversation.name ?? "Unnamed group",
+      avatarKey: null,
+      otherUserId: null,
+      memberCount: counts.get(conversationId) ?? null,
+      isCreator: conversation.creatorId === userId,
+    };
+  }
+
   const otherId =
     conversation.directUserA === userId ? conversation.directUserB : conversation.directUserA;
   const [other] = otherId
@@ -326,11 +678,31 @@ export async function getConversationSummary(
     : [];
   return {
     id: conversation.id,
+    kind: "direct",
     lastMessageAt: conversation.lastMessageAt,
+    displayName: other?.displayName ?? "Unknown member",
+    avatarKey: other?.avatarKey ?? null,
     otherUserId: otherId ?? "",
-    otherDisplayName: other?.displayName ?? "Unknown member",
-    otherAvatarKey: other?.avatarKey ?? null,
+    memberCount: null,
+    isCreator: false,
   };
+}
+
+/** Active members of a group, for the "manage members" UI. Includes the creator. */
+export async function listGroupMembers(database: Database, conversationId: string, userId: string) {
+  const conversation = await requireActiveParticipant(database, conversationId, userId);
+  if (conversation.kind !== "group") throw new Error("Not a group conversation");
+
+  return database
+    .select({ id: users.id, displayName: users.displayName, avatarKey: users.avatarKey })
+    .from(conversationParticipants)
+    .innerJoin(users, eq(users.id, conversationParticipants.userId))
+    .where(
+      and(
+        eq(conversationParticipants.conversationId, conversationId),
+        eq(conversationParticipants.status, "active"),
+      ),
+    );
 }
 
 export interface ListMessagesInput {
@@ -340,7 +712,11 @@ export interface ListMessagesInput {
   limit: number;
 }
 
-/** Keyset pagination via `messages_conversation_idx` (conversationId, id) - id is a UUIDv7. */
+/**
+ * Keyset pagination via `messages_conversation_idx` (conversationId, id) - id is a UUIDv7.
+ * `senderUserId`/`senderDisplayName` are resolved via the sending device for every row (cheap,
+ * and a 1:1 thread just doesn't use them - a group thread needs them to label who sent what).
+ */
 export async function listMessages(database: Database, input: ListMessagesInput) {
   await requireActiveParticipant(database, input.conversationId, input.userId);
 
@@ -348,8 +724,19 @@ export async function listMessages(database: Database, input: ListMessagesInput)
   if (input.cursor) conditions.push(gt(messages.id, input.cursor));
 
   return database
-    .select()
+    .select({
+      id: messages.id,
+      conversationId: messages.conversationId,
+      senderDeviceId: messages.senderDeviceId,
+      senderUserId: devices.userId,
+      senderDisplayName: users.displayName,
+      epoch: messages.epoch,
+      ciphertext: messages.ciphertext,
+      createdAt: messages.createdAt,
+    })
     .from(messages)
+    .innerJoin(devices, eq(devices.id, messages.senderDeviceId))
+    .innerJoin(users, eq(users.id, devices.userId))
     .where(and(...conditions))
     .orderBy(asc(messages.id))
     .limit(input.limit);

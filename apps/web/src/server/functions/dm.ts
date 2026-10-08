@@ -1,26 +1,37 @@
 import {
+  addGroupMember,
   claimKeyPackageForUser,
   createDirectConversation,
+  createGroupConversation,
   DmNoKeyPackageError,
   getBackup,
   getConversationSummary,
   listConversationSummariesForUser,
   listDevicesForUser,
+  listGroupMembers,
   listMessages,
+  listPendingDepartures,
   publishKeyPackages,
   recordDeviceLinkOperations,
   registerDevice,
+  removeGroupMember,
+  requestToLeaveGroup,
+  searchMembers,
   sendMessage,
   upsertBackup,
 } from "@plumas/auth";
 import {
   addDeviceToConversationsSchema,
+  addGroupMemberSchema,
   createBackupSchema,
   listMessagesSchema,
   publishKeyPackagesSchema,
   registerDeviceSchema,
+  removeGroupMemberSchema,
+  searchMembersSchema,
   sendMessageSchema,
   startDirectConversationSchema,
+  startGroupConversationSchema,
 } from "@plumas/validators";
 import { createServerFn } from "@tanstack/react-start";
 import { env } from "cloudflare:workers";
@@ -128,6 +139,8 @@ export const getMessagesFn = createServerFn({ method: "GET" })
     return rows.map((row) => ({
       id: row.id,
       senderDeviceId: row.senderDeviceId,
+      senderUserId: row.senderUserId,
+      senderDisplayName: row.senderDisplayName,
       epoch: row.epoch,
       ciphertext: row.ciphertext.toString("base64"),
       createdAt: row.createdAt,
@@ -183,3 +196,79 @@ export const getBackupFn = createServerFn({ method: "GET" }).handler(async () =>
     r2Blob: r2Blob.toString("base64"),
   };
 });
+
+export const searchMembersFn = createServerFn({ method: "GET" })
+  .validator(searchMembersSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    return searchMembers(getDb(), data.query, user.id);
+  });
+
+export const startGroupConversationFn = createServerFn({ method: "POST" })
+  .validator(startGroupConversationSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    const conversation = await createGroupConversation(getDb(), {
+      conversationId: data.conversationId,
+      creatorId: user.id,
+      creatorDeviceId: data.creatorDeviceId,
+      name: data.name,
+      memberUserIds: data.members.map((member) => member.userId),
+      epoch: data.epoch,
+      welcomeBytes: Buffer.from(data.welcomeBytes, "base64"),
+    });
+    return { conversationId: conversation.id };
+  });
+
+export const addGroupMemberFn = createServerFn({ method: "POST" })
+  .validator(addGroupMemberSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    await addGroupMember(getDb(), {
+      conversationId: data.conversationId,
+      actingUserId: user.id,
+      actingDeviceId: data.actingDeviceId,
+      newUserId: data.newUserId,
+      epoch: data.epoch,
+      welcomeBytes: Buffer.from(data.welcomeBytes, "base64"),
+      commitBytes: Buffer.from(data.commitBytes, "base64"),
+    });
+    return { ok: true as const };
+  });
+
+export const removeGroupMemberFn = createServerFn({ method: "POST" })
+  .validator(removeGroupMemberSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    await removeGroupMember(getDb(), {
+      conversationId: data.conversationId,
+      actingUserId: user.id,
+      actingDeviceId: data.actingDeviceId,
+      targetUserId: data.targetUserId,
+      epoch: data.epoch,
+      commitBytes: Buffer.from(data.commitBytes, "base64"),
+    });
+    return { ok: true as const };
+  });
+
+export const requestToLeaveGroupFn = createServerFn({ method: "POST" })
+  .validator(z.object({ conversationId: z.string().uuid() }))
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    await requestToLeaveGroup(getDb(), data.conversationId, user.id);
+    return { ok: true as const };
+  });
+
+export const getPendingDeparturesFn = createServerFn({ method: "GET" })
+  .validator(z.object({ conversationId: z.string().uuid() }))
+  .handler(async ({ data }) => {
+    await requireUser();
+    return listPendingDepartures(getDb(), data.conversationId);
+  });
+
+export const getGroupMembersFn = createServerFn({ method: "GET" })
+  .validator(z.object({ conversationId: z.string().uuid() }))
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    return listGroupMembers(getDb(), data.conversationId, user.id);
+  });

@@ -7,14 +7,20 @@
 import { getDmClient } from "@plumas/crypto";
 
 import {
+  addGroupMemberFn,
   claimKeyPackageFn,
   createBackupFn,
   getBackupFn,
+  getPendingDeparturesFn,
   publishKeyPackagesFn,
   recordDeviceLinkFn,
   registerDeviceFn,
+  removeGroupMemberFn,
+  requestToLeaveGroupFn,
+  searchMembersFn,
   sendMessageFn,
   startDirectConversationFn,
+  startGroupConversationFn,
 } from "../server/functions/dm";
 
 const KEY_PACKAGE_POOL_SIZE = 5;
@@ -114,11 +120,9 @@ export async function startConversationWithUser(
   const claimed = await claimKeyPackageFn({ data: { userId: otherUserId } });
 
   const conversationId = crypto.randomUUID();
-  const created = await client.createConversation(
-    myUserId,
-    conversationId,
+  const created = await client.createConversation(myUserId, conversationId, [
     fromBase64(claimed.keyPackage),
-  );
+  ]);
 
   const response = await startDirectConversationFn({
     data: {
@@ -151,6 +155,7 @@ export async function sendDmMessage(conversationId: string, plaintext: string): 
 export interface DecryptedMessage {
   id: string;
   mine: boolean;
+  senderDisplayName: string;
   plaintext: string | null;
   createdAt: Date;
 }
@@ -160,11 +165,18 @@ export interface DecryptedMessage {
  * Rows this device authored are read back from the local sent-plaintext cache, never
  * re-decrypted (MLS doesn't support a sender decrypting its own past ciphertext - see
  * storage.ts's StoredSentPlaintext doc comment). `plaintext: null` means a commit/welcome row
- * (device-join bookkeeping) with nothing to display.
+ * (device-join bookkeeping) with nothing to display. `senderDisplayName` is only meaningful for
+ * group threads - a 1:1 thread already knows who "theirs" is from the conversation summary.
  */
 export async function decryptMessages(
   conversationId: string,
-  rows: { id: string; senderDeviceId: string; ciphertext: string; createdAt: Date }[],
+  rows: {
+    id: string;
+    senderDeviceId: string;
+    senderDisplayName: string;
+    ciphertext: string;
+    createdAt: Date;
+  }[],
 ): Promise<DecryptedMessage[]> {
   const client = getDmClient();
   const myDeviceId = await client.getConfirmedDeviceId();
@@ -174,13 +186,20 @@ export async function decryptMessages(
     const mine = row.senderDeviceId === myDeviceId;
     if (mine) {
       const cached = await client.getCachedSentPlaintext(row.id);
-      results.push({ id: row.id, mine, plaintext: cached ?? null, createdAt: row.createdAt });
+      results.push({
+        id: row.id,
+        mine,
+        senderDisplayName: row.senderDisplayName,
+        plaintext: cached ?? null,
+        createdAt: row.createdAt,
+      });
       continue;
     }
     const result = await client.processIncoming(row.id, conversationId, fromBase64(row.ciphertext));
     results.push({
       id: row.id,
       mine,
+      senderDisplayName: row.senderDisplayName,
       plaintext: result.kind === "applicationMessage" ? result.plaintext : null,
       createdAt: row.createdAt,
     });
@@ -243,6 +262,120 @@ export async function linkNewDevice(qrPayload: string): Promise<void> {
   await recordDeviceLinkFn({
     data: { senderDeviceId, newDeviceId: parsed.deviceId, operations },
   });
+}
+
+/** FR-DM-19 member picker: name search over active members, excluding the searcher. */
+export async function searchMembers(
+  query: string,
+): Promise<{ id: string; displayName: string; avatarKey: string | null }[]> {
+  return searchMembersFn({ data: { query } });
+}
+
+/** FR-DM-01/12/19: creates a group conversation with the given name and initial members. */
+export async function startGroupConversation(
+  myUserId: string,
+  name: string,
+  memberUserIds: string[],
+): Promise<string> {
+  const client = getDmClient();
+  const creatorDeviceId = await requireDeviceId();
+
+  const claimed = await Promise.all(
+    memberUserIds.map((userId) => claimKeyPackageFn({ data: { userId } })),
+  );
+
+  const conversationId = crypto.randomUUID();
+  const created = await client.createConversation(
+    myUserId,
+    conversationId,
+    claimed.map((entry) => fromBase64(entry.keyPackage)),
+  );
+
+  const response = await startGroupConversationFn({
+    data: {
+      conversationId,
+      name,
+      creatorDeviceId,
+      epoch: created.epoch,
+      welcomeBytes: toBase64(created.welcomeBytes),
+      members: memberUserIds.map((userId, index) => ({
+        userId,
+        // Non-null: claimed has exactly one entry per memberUserIds entry, same order.
+        deviceId: claimed[index]?.deviceId ?? "",
+      })),
+    },
+  });
+  return response.conversationId;
+}
+
+/** FR-DM-12: the creator adds one more member to an existing group. */
+export async function addMemberToGroup(conversationId: string, newUserId: string): Promise<void> {
+  const client = getDmClient();
+  const actingDeviceId = await requireDeviceId();
+  const claimed = await claimKeyPackageFn({ data: { userId: newUserId } });
+  const result = await client.addDeviceToConversation(
+    conversationId,
+    fromBase64(claimed.keyPackage),
+  );
+  await addGroupMemberFn({
+    data: {
+      conversationId,
+      actingDeviceId,
+      newUserId,
+      epoch: result.epoch,
+      welcomeBytes: toBase64(result.welcomeBytes),
+      commitBytes: toBase64(result.commitBytes),
+    },
+  });
+}
+
+/** FR-DM-12: the creator removes another member. */
+export async function removeMemberFromGroup(
+  conversationId: string,
+  targetUserId: string,
+): Promise<void> {
+  const client = getDmClient();
+  const actingDeviceId = await requireDeviceId();
+  const result = await client.removeGroupMember(conversationId, targetUserId);
+  await removeGroupMemberFn({
+    data: {
+      conversationId,
+      actingDeviceId,
+      targetUserId,
+      epoch: result.epoch,
+      commitBytes: toBase64(result.commitBytes),
+    },
+  });
+}
+
+/**
+ * FR-DM-12 "any member can leave": marks the caller's own departure server-side and forgets
+ * the conversation locally (see @plumas/crypto's `leaveGroupLocally` doc comment for why the
+ * actual MLS removal has to happen on a different device - `finalizePendingDepartures` is that
+ * other half, run opportunistically by any remaining member).
+ */
+export async function leaveGroup(conversationId: string): Promise<void> {
+  const client = getDmClient();
+  await requestToLeaveGroupFn({ data: { conversationId } });
+  await client.leaveGroupLocally(conversationId);
+}
+
+/**
+ * Best-effort cleanup: call when opening a group thread. Finalizes the MLS removal for anyone
+ * who requested to leave (or was removed) but whose leaf might still be in this device's local
+ * tree. A target already excluded throws from the crypto layer; that's expected and ignored -
+ * someone else already finalized it.
+ */
+export async function finalizePendingDepartures(conversationId: string): Promise<void> {
+  const pending = await getPendingDeparturesFn({ data: { conversationId } });
+  for (const targetUserId of pending) {
+    try {
+      await removeMemberFromGroup(conversationId, targetUserId);
+    } catch {
+      // Already excluded from the tree, or this device has no local state for the group yet -
+      // either way, nothing more to do here.
+    }
+  }
 }
 
 export { fromBase64, toBase64 };

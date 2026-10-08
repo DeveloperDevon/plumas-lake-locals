@@ -22,8 +22,10 @@ import {
   getCachedSentPlaintext,
   getConfirmedDeviceId,
   getDeviceSigningPublicKey,
+  leaveGroupLocally,
   listMyConversationIds,
   processIncoming,
+  removeGroupMember,
 } from "./engine.js";
 
 export type WorkerRequest =
@@ -31,7 +33,7 @@ export type WorkerRequest =
   | {
       id: number;
       method: "createConversation";
-      params: { userId: string; conversationId: string; peerKeyPackageBytes: Uint8Array };
+      params: { userId: string; conversationId: string; memberKeyPackagesBytes: Uint8Array[] };
     }
   | {
       id: number;
@@ -44,6 +46,12 @@ export type WorkerRequest =
       method: "addDeviceToConversation";
       params: { conversationId: string; newDeviceKeyPackageBytes: Uint8Array };
     }
+  | {
+      id: number;
+      method: "removeGroupMember";
+      params: { conversationId: string; targetUserId: string };
+    }
+  | { id: number; method: "leaveGroupLocally"; params: { conversationId: string } }
   | { id: number; method: "generateRecoveryKey"; params: Record<string, never> }
   | { id: number; method: "confirmDeviceId"; params: { deviceId: string } }
   | { id: number; method: "getConfirmedDeviceId"; params: Record<string, never> }
@@ -69,7 +77,7 @@ async function handle(request: WorkerRequest): Promise<unknown> {
       return createConversation(
         request.params.userId,
         request.params.conversationId,
-        request.params.peerKeyPackageBytes,
+        request.params.memberKeyPackagesBytes,
       );
     case "processIncoming":
       return processIncoming(
@@ -84,6 +92,10 @@ async function handle(request: WorkerRequest): Promise<unknown> {
         request.params.conversationId,
         request.params.newDeviceKeyPackageBytes,
       );
+    case "removeGroupMember":
+      return removeGroupMember(request.params.conversationId, request.params.targetUserId);
+    case "leaveGroupLocally":
+      return leaveGroupLocally(request.params.conversationId);
     case "generateRecoveryKey":
       return generateRecoveryKey();
     case "confirmDeviceId":

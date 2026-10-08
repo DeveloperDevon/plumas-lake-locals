@@ -58,6 +58,7 @@ import {
 import { decodeRatchetTree, encodeRatchetTree } from "ts-mls/ratchetTree.js";
 
 import {
+  deleteConversationState,
   getProcessedMessage,
   getSentPlaintext,
   listAllConversationStates,
@@ -198,15 +199,20 @@ export interface CreateConversationResult {
 }
 
 /**
- * Creates a brand-new 1:1 group containing only the local member, then immediately commits an
- * Add for the peer's KeyPackage. Returns the wire-encoded Welcome and Commit, both meant to be
- * written as `messages` rows (senderDeviceId = this device) for the peer/other devices to pick
- * up via `processIncoming`.
+ * Creates a brand-new group containing only the local member, then immediately commits one Add
+ * per entry in `memberKeyPackagesBytes` (a single peer for a 1:1, 2-49 for a group - MLS puts
+ * no special case on the count). One commit with N Add proposals produces ONE Welcome that
+ * bundles per-recipient encrypted secrets for all N new members (confirmed against the
+ * installed ts-mls's welcome.d.ts) - each joining device's `processIncoming` welcome-join loop
+ * already tries every locally-unconsumed KeyPackage against a Welcome, so it needs no changes
+ * to find its own entry inside a multi-recipient one. Returns the wire-encoded Welcome and
+ * Commit, both meant to be written as `messages` rows (senderDeviceId = this device) for the
+ * new members' other devices to pick up via `processIncoming`.
  */
 export async function createConversation(
   userId: string,
   conversationId: string,
-  peerKeyPackageBytes: Uint8Array,
+  memberKeyPackagesBytes: Uint8Array[],
 ): Promise<CreateConversationResult> {
   const impl = await getImpl();
   const signingKey = await getOrCreateDeviceSigningKey();
@@ -231,13 +237,17 @@ export async function createConversation(
     impl,
   );
 
-  const decodedPeerPackage = decodePeerKeyPackage(peerKeyPackageBytes);
   const commitResult = await createCommit(
     { state, cipherSuite: impl },
-    { extraProposals: [{ proposalType: "add", add: { keyPackage: decodedPeerPackage } }] },
+    {
+      extraProposals: memberKeyPackagesBytes.map((bytes) => ({
+        proposalType: "add" as const,
+        add: { keyPackage: decodePeerKeyPackage(bytes) },
+      })),
+    },
   );
   state = commitResult.newState;
-  if (!commitResult.welcome) throw new Error("Expected a welcome message for the peer");
+  if (!commitResult.welcome) throw new Error("Expected a welcome message for the new members");
   if (commitResult.commit.wireformat !== "mls_private_message") {
     throw new Error("Expected the add commit as a private message");
   }
@@ -453,7 +463,12 @@ export interface AddDeviceResult {
   epoch: number;
 }
 
-/** Adds another of the local user's devices (scanned via QR) to an existing conversation. */
+/**
+ * Adds a KeyPackage to an existing conversation via a single Add-proposal commit - used both
+ * for linking another of the local user's own devices (scanned via QR) and, identically, for
+ * adding a brand new member to a group (the MLS operation doesn't distinguish the two; only the
+ * caller's intent differs).
+ */
 export async function addDeviceToConversation(
   conversationId: string,
   newDeviceKeyPackageBytes: Uint8Array,
@@ -491,4 +506,107 @@ export async function addDeviceToConversation(
     ),
     epoch: Number(commitResult.newState.groupContext.epoch),
   };
+}
+
+/**
+ * A user's leaves within a group's current ratchet tree - every device they've linked occupies
+ * its own leaf (the PRD's "every device is its own MLS member"), all sharing the same
+ * credential identity (the userId this client always sets as `credential.identity`, see
+ * `createConversation`/`generateKeyPackages`). Removing "a member" removes every leaf that
+ * matches, not just one device.
+ */
+function findLeafIndexesForIdentity(tree: RatchetTree, userId: string): number[] {
+  const target = new TextEncoder().encode(userId);
+  const indexes: number[] = [];
+  for (let nodeIndex = 0; nodeIndex < tree.length; nodeIndex += 2) {
+    const node = tree[nodeIndex];
+    if (node?.nodeType !== "leaf") continue;
+    const { credential } = node.leaf;
+    if (credential.credentialType === "basic" && bytesEqual(credential.identity, target)) {
+      indexes.push(nodeIndex / 2);
+    }
+  }
+  return indexes;
+}
+
+function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] !== b[i]) return false;
+  }
+  return true;
+}
+
+export interface RemoveMemberResult {
+  commitBytes: Uint8Array;
+  epoch: number;
+}
+
+/**
+ * Removes every one of `targetUserId`'s devices from a group via a single commit (one Remove
+ * proposal per matching leaf). No Welcome is produced - nobody is joining. Authorization (only
+ * the conversation's creator may remove another member) is enforced server-side, not here; this
+ * function only performs the MLS operation.
+ *
+ * The real ts-mls library rejects a commit whose Remove proposals include the committer's own
+ * leaf ("Commit cannot contain a remove proposal removing committer" - confirmed empirically,
+ * not just from the types) - this is standard MLS: a member cannot remove themselves in a
+ * commit they author, since they wouldn't be a member of the tree the commit's own epoch
+ * secrets are derived for. So this function must always be called by a DIFFERENT device than
+ * `targetUserId`'s - see `leaveGroupLocally`'s doc comment for how a voluntary leave is handled.
+ */
+export async function removeGroupMember(
+  conversationId: string,
+  targetUserId: string,
+): Promise<RemoveMemberResult> {
+  const impl = await getImpl();
+  const state = await loadState(conversationId);
+  if (!state) throw new Error(`No local state for conversation ${conversationId}`);
+
+  const leafIndexes = findLeafIndexesForIdentity(state.ratchetTree, targetUserId);
+  if (leafIndexes.length === 0) {
+    throw new Error(`${targetUserId} has no devices in this conversation's current tree`);
+  }
+
+  const commitResult = await createCommit(
+    { state, cipherSuite: impl },
+    {
+      extraProposals: leafIndexes.map((removed) => ({
+        proposalType: "remove" as const,
+        remove: { removed },
+      })),
+    },
+  );
+  if (commitResult.commit.wireformat !== "mls_private_message") {
+    throw new Error("Expected the remove commit as a private message");
+  }
+  await persistState(conversationId, commitResult.newState);
+
+  return {
+    commitBytes: encodePlainRow(
+      encodeMlsMessage({
+        privateMessage: commitResult.commit.privateMessage,
+        wireformat: "mls_private_message",
+        version: "mls10",
+      }),
+    ),
+    epoch: Number(commitResult.newState.groupContext.epoch),
+  };
+}
+
+/**
+ * A member can't cryptographically remove themselves (see `removeGroupMember`'s doc comment),
+ * so "leave" is two separate steps at the application level: the leaving member's own device
+ * calls this to stop tracking the conversation locally and immediately (the server-side
+ * `conversation_participants` status change that stops it being fetched for them at all is a
+ * dm-service concern, not this module's); the actual MLS removal - excluding them from future
+ * epochs' keys - happens later, the next time any OTHER member's client with local state for
+ * this group notices the pending departure and calls `removeGroupMember` on their behalf (same
+ * primitive the creator uses to remove someone involuntarily). Until that happens, the leaving
+ * member's former device would still be cryptographically capable of decrypting messages it
+ * somehow obtained, same inherent limitation as any poll-based (non-realtime) delivery system -
+ * there is always a window before every client has caught up.
+ */
+export async function leaveGroupLocally(conversationId: string): Promise<void> {
+  await deleteConversationState(conversationId);
 }

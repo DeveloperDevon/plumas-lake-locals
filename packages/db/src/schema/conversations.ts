@@ -22,6 +22,10 @@ export const conversations = pgTable(
     id: uuid("id").primaryKey().defaultRandom(),
     kind: conversationKindEnum("kind").notNull(),
     name: text("name"),
+    // FR-DM-12: only the creator can add/remove members in a group conversation. Null for
+    // direct conversations (neither party is a "creator" in that sense); set once at creation
+    // for groups, never transferred.
+    creatorId: uuid("creator_id").references(() => users.id),
     mlsGroupId: text("mls_group_id"),
     epoch: integer("epoch").notNull().default(0),
     businessId: uuid("business_id").references(() => businesses.id),

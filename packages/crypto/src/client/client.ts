@@ -10,6 +10,7 @@ import type {
   EncryptMessageResult,
   GeneratedKeyPackage,
   ProcessIncomingResult,
+  RemoveMemberResult,
 } from "./engine.js";
 import type { WorkerRequest, WorkerResponse } from "./worker.js";
 
@@ -50,9 +51,9 @@ export class DmClient {
   createConversation(
     userId: string,
     conversationId: string,
-    peerKeyPackageBytes: Uint8Array,
+    memberKeyPackagesBytes: Uint8Array[],
   ): Promise<CreateConversationResult> {
-    return this.call("createConversation", { userId, conversationId, peerKeyPackageBytes });
+    return this.call("createConversation", { userId, conversationId, memberKeyPackagesBytes });
   }
 
   processIncoming(
@@ -72,6 +73,14 @@ export class DmClient {
     newDeviceKeyPackageBytes: Uint8Array,
   ): Promise<AddDeviceResult> {
     return this.call("addDeviceToConversation", { conversationId, newDeviceKeyPackageBytes });
+  }
+
+  removeGroupMember(conversationId: string, targetUserId: string): Promise<RemoveMemberResult> {
+    return this.call("removeGroupMember", { conversationId, targetUserId });
+  }
+
+  leaveGroupLocally(conversationId: string): Promise<void> {
+    return this.call("leaveGroupLocally", { conversationId });
   }
 
   generateRecoveryKey(): Promise<string> {

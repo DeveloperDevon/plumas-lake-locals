@@ -11,4 +11,5 @@ export type {
   EncryptMessageResult,
   GeneratedKeyPackage,
   ProcessIncomingResult,
+  RemoveMemberResult,
 } from "./client/engine.js";

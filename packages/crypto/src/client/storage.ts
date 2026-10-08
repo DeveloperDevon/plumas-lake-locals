@@ -151,6 +151,11 @@ export async function listAllConversationStates(): Promise<StoredConversationSta
   return db.getAll("conversations");
 }
 
+export async function deleteConversationState(conversationId: string): Promise<void> {
+  const db = await getDb();
+  await db.delete("conversations", conversationId);
+}
+
 export async function restoreConversationState(
   conversationId: string,
   encodedGroupState: Uint8Array,

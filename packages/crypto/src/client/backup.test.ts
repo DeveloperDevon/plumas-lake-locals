@@ -41,11 +41,9 @@ describe("full device backup/restore", () => {
     if (!peerKeyPackage) throw new Error("Expected a generated KeyPackage");
 
     await use(DEVICE_DB);
-    const created = await createConversation(
-      "me",
-      conversationId,
+    const created = await createConversation("me", conversationId, [
       peerKeyPackage.publicPackageBytes,
-    );
+    ]);
 
     await use(PEER_DB);
     await processIncoming("msg-welcome", conversationId, created.welcomeBytes);
@@ -86,11 +84,9 @@ describe("full device backup/restore", () => {
     // KeyPackage that was backed up before it was ever consumed.
     await use(PEER_DB);
     const secondConversationId = "33333333-3333-3333-3333-333333333333";
-    const secondInvite = await createConversation(
-      "peer",
-      secondConversationId,
+    const secondInvite = await createConversation("peer", secondConversationId, [
       spareKeyPackage.publicPackageBytes,
-    );
+    ]);
 
     await use(RESTORED_DB);
     const joinResult = await processIncoming(
@@ -112,11 +108,9 @@ describe("full device backup/restore", () => {
     if (!peerKeyPackage) throw new Error("Expected a generated KeyPackage");
 
     await use(DEVICE_DB);
-    const created = await createConversation(
-      "me",
-      conversationId,
+    const created = await createConversation("me", conversationId, [
       peerKeyPackage.publicPackageBytes,
-    );
+    ]);
     await processIncoming("msg-welcome", conversationId, created.welcomeBytes);
 
     await use(PEER_DB);

@@ -64,3 +64,45 @@ export const createBackupSchema = z.object({
   r2Blob: base64BytesSchema,
 });
 export type CreateBackupInput = z.infer<typeof createBackupSchema>;
+
+export const groupNameSchema = z.string().trim().min(1).max(100);
+
+export const startGroupConversationSchema = z.object({
+  // Client-generated, same reasoning as startDirectConversationSchema's conversationId.
+  conversationId: uuidSchema,
+  name: groupNameSchema,
+  creatorDeviceId: uuidSchema,
+  epoch: z.number().int().min(0),
+  welcomeBytes: base64BytesSchema,
+  // One claimed KeyPackage per invited member, in the same order the client built the Add
+  // proposals in - the server needs each member's userId to create their participant row, and
+  // their deviceId to know which device's KeyPackage pool was drawn from (for future reference,
+  // not currently persisted separately).
+  members: z
+    .array(z.object({ userId: uuidSchema, deviceId: uuidSchema }))
+    .min(1)
+    .max(49),
+});
+export type StartGroupConversationInput = z.infer<typeof startGroupConversationSchema>;
+
+export const addGroupMemberSchema = z.object({
+  conversationId: uuidSchema,
+  actingDeviceId: uuidSchema,
+  newUserId: uuidSchema,
+  epoch: z.number().int().min(0),
+  welcomeBytes: base64BytesSchema,
+  commitBytes: base64BytesSchema,
+});
+export type AddGroupMemberInput = z.infer<typeof addGroupMemberSchema>;
+
+export const removeGroupMemberSchema = z.object({
+  conversationId: uuidSchema,
+  actingDeviceId: uuidSchema,
+  targetUserId: uuidSchema,
+  epoch: z.number().int().min(0),
+  commitBytes: base64BytesSchema,
+});
+export type RemoveGroupMemberInput = z.infer<typeof removeGroupMemberSchema>;
+
+export const searchMembersSchema = z.object({ query: z.string().trim().min(1).max(100) });
+export type SearchMembersInput = z.infer<typeof searchMembersSchema>;
