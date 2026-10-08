@@ -1,5 +1,11 @@
 import { Link } from "@tanstack/react-router";
-import { CircleUserRound, Newspaper, Settings as SettingsIcon, Shield } from "lucide-react";
+import {
+  CircleUserRound,
+  MessageCircle,
+  Newspaper,
+  Settings as SettingsIcon,
+  Shield,
+} from "lucide-react";
 import type { ComponentType } from "react";
 
 interface NavItem {
@@ -11,6 +17,7 @@ interface NavItem {
 function navItems(userId: string, isAdmin: boolean): NavItem[] {
   const items: NavItem[] = [
     { to: "/feed", label: "Feed", icon: Newspaper },
+    { to: "/messages", label: "Messages", icon: MessageCircle },
     { to: `/profile/${userId}`, label: "Profile", icon: CircleUserRound },
     { to: "/settings", label: "Settings", icon: SettingsIcon },
   ];

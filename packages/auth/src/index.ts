@@ -1,5 +1,6 @@
 export * from "./comment-service";
 export * from "./config";
+export * from "./dm-service";
 export * from "./invite-service";
 export * from "./media-service";
 export * from "./moderation-service";

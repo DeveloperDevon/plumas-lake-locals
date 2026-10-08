@@ -6,6 +6,7 @@ const tabs = [
   { to: "/settings/profile", label: "Profile" },
   { to: "/settings/appearance", label: "Appearance" },
   { to: "/settings/invites", label: "Invites" },
+  { to: "/settings/messaging", label: "Messaging" },
   { to: "/settings/account", label: "Account" },
 ];
 

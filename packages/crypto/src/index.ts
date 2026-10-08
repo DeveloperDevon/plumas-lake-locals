@@ -1,5 +1,14 @@
-// Placeholder package: the MLS end-to-end encryption client for direct messages (device keys,
-// the Web Worker running the MLS implementation, encrypted history backup) is built in the
-// DMs/encryption phase, gated by the crypto spike described in docs/adr/0005. This package
-// exists now so the workspace, Turborepo pipeline and CI already account for it.
-export {};
+// MLS end-to-end encryption client for direct messages (task #22). Device keys, the MLS
+// operations themselves, and IndexedDB persistence run inside a Web Worker (client/worker.ts)
+// per docs/adr/0006; `getDmClient()` is the only entry point the rest of the app should use.
+export type { EncryptedBackup } from "./client/backup.js";
+export { generateRecoveryKey } from "./client/backup.js";
+export { DmClient, getDmClient } from "./client/client.js";
+export type {
+  AddDeviceResult,
+  CreateConversationResult,
+  DeviceSigningKey,
+  EncryptMessageResult,
+  GeneratedKeyPackage,
+  ProcessIncomingResult,
+} from "./client/engine.js";

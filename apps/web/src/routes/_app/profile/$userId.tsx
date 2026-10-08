@@ -1,12 +1,13 @@
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@plumas/ui";
 import type { RelationshipType } from "@plumas/validators";
 import { relationshipLabel, relationshipTypes } from "@plumas/validators";
-import { createFileRoute, Link, useRouter } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { CircleUserRound } from "lucide-react";
+import { CircleUserRound, MessageCircle } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { ReportToggle } from "../../../components/report-toggle";
+import { startConversationWithUser } from "../../../lib/dm-client";
 import { formatDate } from "../../../lib/format-date";
 import { mediaUrl, uploadImage } from "../../../lib/upload-image";
 import { getUserMedia } from "../../../server/functions/media";
@@ -99,7 +100,10 @@ function ProfileView() {
             Edit profile
           </Link>
         ) : (
-          <ReportToggle targetType="profile" targetId={userId} />
+          <div className="flex items-center gap-3">
+            <MessageButton otherUserId={userId} />
+            <ReportToggle targetType="profile" targetId={userId} />
+          </div>
         )}
       </div>
 
@@ -238,6 +242,44 @@ function ProfileView() {
         </CardContent>
       </Card>
     </main>
+  );
+}
+
+/** Starts (or opens the existing) 1:1 conversation with this profile's owner. */
+function MessageButton({ otherUserId }: { otherUserId: string }) {
+  const { user: currentUser } = Route.useRouteContext();
+  const navigate = useNavigate();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        disabled={busy}
+        className="flex items-center gap-1 text-sm font-medium text-muted-foreground hover:text-foreground"
+        onClick={() => {
+          setBusy(true);
+          setError(null);
+          void startConversationWithUser(currentUser.id, otherUserId)
+            .then((conversationId) => {
+              void navigate({ to: "/messages/$conversationId", params: { conversationId } });
+            })
+            .catch((messageError: unknown) => {
+              setError(
+                messageError instanceof Error ? messageError.message : "Couldn't start that chat.",
+              );
+            })
+            .finally(() => {
+              setBusy(false);
+            });
+        }}
+      >
+        <MessageCircle className="h-4 w-4" />
+        Message
+      </button>
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+    </div>
   );
 }
 
