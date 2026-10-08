@@ -1,15 +1,17 @@
+import type { GroupSummary } from "@plumas/auth";
 import { Button, Card, CardContent, CardHeader, CardTitle } from "@plumas/ui";
 import type { RelationshipType } from "@plumas/validators";
 import { relationshipLabel, relationshipTypes } from "@plumas/validators";
 import { createFileRoute, Link, useNavigate, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { CircleUserRound, MessageCircle } from "lucide-react";
+import { CircleUserRound, MessageCircle, Users } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { ReportToggle } from "../../../components/report-toggle";
 import { startConversationWithUser } from "../../../lib/dm-client";
 import { formatDate } from "../../../lib/format-date";
 import { mediaUrl, uploadImage } from "../../../lib/upload-image";
+import { getGroupsForUserFn } from "../../../server/functions/groups";
 import { getUserMedia } from "../../../server/functions/media";
 import { getProfileById } from "../../../server/functions/profile";
 import {
@@ -24,15 +26,16 @@ import {
 export const Route = createFileRoute("/_app/profile/$userId")({
   loader: async ({ params }) => {
     const profile = await getProfileById({ data: { userId: params.userId } });
-    const [media, relationships, status, pending] = await Promise.all([
+    const [media, relationships, status, pending, groups] = await Promise.all([
       getUserMedia({ data: { userId: params.userId } }),
       getRelationshipsForProfile({ data: { userId: params.userId } }),
       profile && !profile.isOwner
         ? getRelationshipStatus({ data: { otherUserId: params.userId } })
         : Promise.resolve(null),
       profile?.isOwner ? getMyPendingRequests() : Promise.resolve({ incoming: [], outgoing: [] }),
+      getGroupsForUserFn({ data: { userId: params.userId } }),
     ]);
-    return { profile, media, relationships, status, pending };
+    return { profile, media, relationships, status, pending, groups };
   },
   component: ProfileView,
 });
@@ -46,7 +49,7 @@ function formatBirthday(month: number | null, day: number | null): string | null
 }
 
 function ProfileView() {
-  const { profile, media, relationships, status, pending } = Route.useLoaderData();
+  const { profile, media, relationships, status, pending, groups } = Route.useLoaderData();
   const { userId } = Route.useParams();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -176,6 +179,8 @@ function ProfileView() {
           void router.invalidate();
         }}
       />
+
+      <GroupsCard groups={groups} />
 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
@@ -557,6 +562,32 @@ function FamilyCard({
             {isOwner ? "No family connections yet." : "No family connections yet."}
           </p>
         ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+/** FR-GRP-11: public memberships only - a profile never reveals a private group membership. */
+function GroupsCard({ groups }: { groups: GroupSummary[] }) {
+  if (groups.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Groups</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        {groups.map((group) => (
+          <Link
+            key={group.id}
+            to="/groups/$slug"
+            params={{ slug: group.slug }}
+            className="flex items-center gap-3 rounded-md px-2 py-2 text-sm hover:bg-muted"
+          >
+            <Users className="h-6 w-6 shrink-0 text-muted-foreground" />
+            <span className="truncate">{group.name}</span>
+          </Link>
+        ))}
       </CardContent>
     </Card>
   );

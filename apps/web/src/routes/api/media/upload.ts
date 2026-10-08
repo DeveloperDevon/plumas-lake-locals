@@ -2,8 +2,11 @@ import {
   countPostMedia,
   createMedia,
   getOwnedPost,
+  GroupForbiddenError,
   PostForbiddenError,
   PostNotFoundError,
+  requireGroupAdmin,
+  setGroupCover,
   setUserAvatar,
   setUserCover,
 } from "@plumas/auth";
@@ -47,6 +50,22 @@ export const Route = createFileRoute("/api/media/upload")({
         // Checked before the (comparatively expensive) image processing step, so a doomed
         // upload fails fast rather than burning Photon CPU time first.
         let postId: string | undefined;
+        let groupId: string | undefined;
+        if (purpose === "group_cover") {
+          const groupIdResult = z.string().uuid().safeParse(form.get("groupId"));
+          if (!groupIdResult.success) {
+            return Response.json({ ok: false, message: "Missing groupId." }, { status: 400 });
+          }
+          groupId = groupIdResult.data;
+          try {
+            await requireGroupAdmin(db, groupId, user.id);
+          } catch (error) {
+            if (error instanceof GroupForbiddenError) {
+              return Response.json({ ok: false, message: error.message }, { status: 403 });
+            }
+            throw error;
+          }
+        }
         if (purpose === "post") {
           const postIdResult = z.string().uuid().safeParse(form.get("postId"));
           if (!postIdResult.success) {
@@ -97,6 +116,8 @@ export const Route = createFileRoute("/api/media/upload")({
           await setUserAvatar(db, user.id, processed.r2KeyPrefix);
         } else if (purpose === "cover") {
           await setUserCover(db, user.id, processed.r2KeyPrefix);
+        } else if (purpose === "group_cover" && groupId) {
+          await setGroupCover(db, groupId, processed.r2KeyPrefix);
         }
 
         return Response.json({

@@ -2,6 +2,7 @@ export * from "./auth";
 export * from "./comment";
 export * from "./common";
 export * from "./dm";
+export * from "./group";
 export * from "./invite";
 export * from "./media";
 export * from "./moderation";

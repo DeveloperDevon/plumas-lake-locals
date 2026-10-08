@@ -65,12 +65,13 @@ export const createBackupSchema = z.object({
 });
 export type CreateBackupInput = z.infer<typeof createBackupSchema>;
 
-export const groupNameSchema = z.string().trim().min(1).max(100);
+// Named for the DM conversation, not the social Groups feature (see group.ts's groupNameSchema).
+export const dmGroupNameSchema = z.string().trim().min(1).max(100);
 
 export const startGroupConversationSchema = z.object({
   // Client-generated, same reasoning as startDirectConversationSchema's conversationId.
   conversationId: uuidSchema,
-  name: groupNameSchema,
+  name: dmGroupNameSchema,
   creatorDeviceId: uuidSchema,
   epoch: z.number().int().min(0),
   welcomeBytes: base64BytesSchema,

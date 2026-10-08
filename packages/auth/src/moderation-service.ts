@@ -21,7 +21,7 @@ async function requireAdmin(database: Database, actingUserId: string) {
   if (actingUser?.role !== "admin") throw new ModerationForbiddenError();
 }
 
-async function writeAuditLog(
+export async function writeAuditLog(
   database: Database,
   entry: {
     action: string;

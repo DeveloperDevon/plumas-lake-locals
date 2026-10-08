@@ -1,4 +1,7 @@
 import {
+  groupMemberRoles,
+  groupMemberStatuses,
+  groupVisibilities,
   postCategories,
   reactionTypes,
   relationshipLabelGenderValues,
@@ -25,13 +28,10 @@ export const relationshipLabelGenderEnum = pgEnum("relationship_label_gender", [
 export const relationshipTypeEnum = pgEnum("relationship_type", [...relationshipTypes]);
 export const relationshipStatusEnum = pgEnum("relationship_status", [...relationshipStatuses]);
 
-export const groupVisibilityEnum = pgEnum("group_visibility", ["public", "private"]);
-export const groupMemberRoleEnum = pgEnum("group_member_role", ["owner", "admin", "member"]);
-export const groupMemberStatusEnum = pgEnum("group_member_status", [
-  "requested",
-  "invited",
-  "active",
-]);
+// Generated from @plumas/validators' canonical lists, same reasoning as themeEnum above.
+export const groupVisibilityEnum = pgEnum("group_visibility", [...groupVisibilities]);
+export const groupMemberRoleEnum = pgEnum("group_member_role", [...groupMemberRoles]);
+export const groupMemberStatusEnum = pgEnum("group_member_status", [...groupMemberStatuses]);
 
 export const businessManagerRoleEnum = pgEnum("business_manager_role", ["owner", "manager"]);
 

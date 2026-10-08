@@ -5,6 +5,7 @@ import {
   Newspaper,
   Settings as SettingsIcon,
   Shield,
+  Users,
 } from "lucide-react";
 import type { ComponentType } from "react";
 
@@ -17,6 +18,7 @@ interface NavItem {
 function navItems(userId: string, isAdmin: boolean): NavItem[] {
   const items: NavItem[] = [
     { to: "/feed", label: "Feed", icon: Newspaper },
+    { to: "/groups", label: "Groups", icon: Users },
     { to: "/messages", label: "Messages", icon: MessageCircle },
     { to: `/profile/${userId}`, label: "Profile", icon: CircleUserRound },
     { to: "/settings", label: "Settings", icon: SettingsIcon },

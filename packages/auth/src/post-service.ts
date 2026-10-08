@@ -138,6 +138,10 @@ export interface CreatePostInput {
   authorId: string;
   body: string;
   category?: PostCategory | undefined;
+  // FR-GRP-06: a group's board reuses this same function with contextType "group" and the
+  // group's id - defaults to the main feed, unchanged for every existing feed call site.
+  contextType?: "feed" | "group";
+  contextId?: string | undefined;
 }
 
 export async function createPost(database: Database, input: CreatePostInput) {
@@ -145,7 +149,8 @@ export async function createPost(database: Database, input: CreatePostInput) {
     .insert(posts)
     .values({
       authorId: input.authorId,
-      contextType: "feed",
+      contextType: input.contextType ?? "feed",
+      contextId: input.contextId ?? null,
       body: input.body,
       category: input.category ?? null,
     })
@@ -214,6 +219,59 @@ export async function listFeedPosts(
     isNull(posts.contextId),
     isNull(posts.deletedAt),
     isNull(posts.pinnedAt),
+  ];
+  if (cursor) conditions.push(lt(posts.createdAt, new Date(cursor)));
+
+  const rows = await database
+    .select({
+      id: posts.id,
+      body: posts.body,
+      category: posts.category,
+      pinnedAt: posts.pinnedAt,
+      createdAt: posts.createdAt,
+      editedAt: posts.editedAt,
+      authorId: posts.authorId,
+      authorDisplayName: users.displayName,
+      authorAvatarKey: users.avatarKey,
+    })
+    .from(posts)
+    .innerJoin(users, eq(posts.authorId, users.id))
+    .where(and(...conditions))
+    .orderBy(desc(posts.createdAt))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const postIds = page.map((row) => row.id);
+  const [mediaMap, { counts, mine }, commentCountMap] = await Promise.all([
+    attachMedia(database, page),
+    attachReactions(database, postIds, viewerId),
+    countCommentsForPosts(database, postIds),
+  ]);
+  const lastRow = page[page.length - 1];
+
+  return {
+    items: page.map((row) => toFeedPost(row, mediaMap, counts, mine, commentCountMap)),
+    nextCursor: hasMore && lastRow ? lastRow.createdAt.toISOString() : null,
+  };
+}
+
+export interface ListGroupPostsInput {
+  groupId: string;
+  cursor?: string | undefined;
+  limit: number;
+  viewerId: string;
+}
+
+/** FR-GRP-06: same shape as listFeedPosts, scoped to one group's board instead of the feed. */
+export async function listGroupPosts(
+  database: Database,
+  { groupId, cursor, limit, viewerId }: ListGroupPostsInput,
+): Promise<FeedPage> {
+  const conditions = [
+    eq(posts.contextType, "group"),
+    eq(posts.contextId, groupId),
+    isNull(posts.deletedAt),
   ];
   if (cursor) conditions.push(lt(posts.createdAt, new Date(cursor)));
 

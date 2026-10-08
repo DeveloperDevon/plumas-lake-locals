@@ -1,3 +1,4 @@
+import type { MediaPurpose } from "@plumas/validators";
 import { MAX_UPLOAD_BYTES } from "@plumas/validators";
 import { heicTo, isHeic } from "heic-to";
 
@@ -31,15 +32,16 @@ export interface UploadResult {
 
 export async function uploadImage(
   file: File,
-  purpose: "avatar" | "cover" | "gallery" | "post",
-  postId?: string,
+  purpose: MediaPurpose,
+  context?: { postId?: string; groupId?: string },
 ): Promise<UploadResult> {
   const prepared = await prepareImageFile(file);
 
   const form = new FormData();
   form.append("file", prepared);
   form.append("purpose", purpose);
-  if (postId) form.append("postId", postId);
+  if (context?.postId) form.append("postId", context.postId);
+  if (context?.groupId) form.append("groupId", context.groupId);
 
   const response = await fetch("/api/media/upload", { method: "POST", body: form });
   const result: unknown = await response.json();
