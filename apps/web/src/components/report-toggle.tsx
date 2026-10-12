@@ -10,6 +10,7 @@ const reportReasonLabels: Record<ReportReason, string> = {
   harassment: "Harassment",
   under_18: "Under 18",
   inappropriate: "Inappropriate",
+  doesnt_serve_plumas_lake: "Doesn't serve Plumas Lake",
   other: "Other",
 };
 

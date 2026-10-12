@@ -33,7 +33,7 @@ export interface UploadResult {
 export async function uploadImage(
   file: File,
   purpose: MediaPurpose,
-  context?: { postId?: string; groupId?: string },
+  context?: { postId?: string; groupId?: string; businessId?: string },
 ): Promise<UploadResult> {
   const prepared = await prepareImageFile(file);
 
@@ -42,6 +42,7 @@ export async function uploadImage(
   form.append("purpose", purpose);
   if (context?.postId) form.append("postId", context.postId);
   if (context?.groupId) form.append("groupId", context.groupId);
+  if (context?.businessId) form.append("businessId", context.businessId);
 
   const response = await fetch("/api/media/upload", { method: "POST", body: form });
   const result: unknown = await response.json();

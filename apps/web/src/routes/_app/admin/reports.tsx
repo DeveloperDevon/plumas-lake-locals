@@ -8,7 +8,9 @@ import { formatDateTime } from "../../../lib/format-date";
 import {
   adminDeleteContentFn,
   getOpenReports,
+  republishBusinessFn,
   resolveReportFn,
+  unpublishBusinessFn,
 } from "../../../server/functions/moderation";
 
 export const Route = createFileRoute("/_app/admin/reports")({
@@ -21,6 +23,7 @@ const reasonLabels: Record<string, string> = {
   harassment: "Harassment",
   under_18: "Under 18",
   inappropriate: "Inappropriate",
+  doesnt_serve_plumas_lake: "Doesn't serve Plumas Lake",
   other: "Other",
 };
 
@@ -29,6 +32,8 @@ function Reports() {
   const router = useRouter();
   const doResolve = useServerFn(resolveReportFn);
   const doDelete = useServerFn(adminDeleteContentFn);
+  const doUnpublish = useServerFn(unpublishBusinessFn);
+  const doRepublish = useServerFn(republishBusinessFn);
   const [busyId, setBusyId] = useState<string | null>(null);
 
   function run(id: string, action: Promise<unknown>) {
@@ -87,6 +92,32 @@ function Reports() {
                       run(report.id, doDelete({ data: { targetType, targetId } }));
                     }}
                   />
+                ) : null}
+                {report.targetType === "business" ? (
+                  <>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      disabled={busyId === report.id}
+                      onClick={() => {
+                        run(report.id, doUnpublish({ data: { businessId: report.targetId } }));
+                      }}
+                    >
+                      Unpublish business
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      disabled={busyId === report.id}
+                      onClick={() => {
+                        run(report.id, doRepublish({ data: { businessId: report.targetId } }));
+                      }}
+                    >
+                      Republish
+                    </Button>
+                  </>
                 ) : null}
               </div>
             </CardContent>

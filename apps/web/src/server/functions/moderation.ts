@@ -5,12 +5,15 @@ import {
   listInviteTree,
   listMembersForAdmin,
   listOpenReports,
+  republishBusiness,
   resolveReport,
   suspendUser,
+  unpublishBusiness,
   unsuspendUser,
 } from "@plumas/auth";
 import {
   adminDeleteContentSchema,
+  businessIdSchema,
   createReportSchema,
   resolveReportSchema,
   suspendUserSchema,
@@ -80,3 +83,19 @@ export const getAuditLog = createServerFn({ method: "GET" }).handler(async () =>
   const user = await requireUser();
   return listAuditLog(getDb(), user.id);
 });
+
+export const unpublishBusinessFn = createServerFn({ method: "POST" })
+  .validator(businessIdSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    await unpublishBusiness(getDb(), data.businessId, user.id);
+    return { ok: true as const };
+  });
+
+export const republishBusinessFn = createServerFn({ method: "POST" })
+  .validator(businessIdSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    await republishBusiness(getDb(), data.businessId, user.id);
+    return { ok: true as const };
+  });

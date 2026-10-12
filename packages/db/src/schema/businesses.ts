@@ -18,6 +18,10 @@ export const businesses = pgTable("businesses", {
   // FR-BIZ-01/08: required; confirms the business serves Plumas Lake even if the owner doesn't live there.
   serviceArea: text("service_area").notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  // FR-BIZ-09: set by a site admin after an upheld "doesn't serve Plumas Lake" report. Hidden
+  // from the directory and non-managers while set; managers still see it, with a banner - the
+  // visible-state equivalent of "notify the owner" until in-app notifications exist.
+  unpublishedAt: timestamp("unpublished_at", { withTimezone: true }),
 });
 
 export const businessManagers = pgTable(

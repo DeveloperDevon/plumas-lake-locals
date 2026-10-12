@@ -138,9 +138,10 @@ export interface CreatePostInput {
   authorId: string;
   body: string;
   category?: PostCategory | undefined;
-  // FR-GRP-06: a group's board reuses this same function with contextType "group" and the
-  // group's id - defaults to the main feed, unchanged for every existing feed call site.
-  contextType?: "feed" | "group";
+  // FR-GRP-06/FR-BIZ-02: a group's or business page's board reuses this same function with
+  // contextType "group"/"business" and that entity's id - defaults to the main feed, unchanged
+  // for every existing feed call site.
+  contextType?: "feed" | "group" | "business";
   contextId?: string | undefined;
 }
 
@@ -271,6 +272,59 @@ export async function listGroupPosts(
   const conditions = [
     eq(posts.contextType, "group"),
     eq(posts.contextId, groupId),
+    isNull(posts.deletedAt),
+  ];
+  if (cursor) conditions.push(lt(posts.createdAt, new Date(cursor)));
+
+  const rows = await database
+    .select({
+      id: posts.id,
+      body: posts.body,
+      category: posts.category,
+      pinnedAt: posts.pinnedAt,
+      createdAt: posts.createdAt,
+      editedAt: posts.editedAt,
+      authorId: posts.authorId,
+      authorDisplayName: users.displayName,
+      authorAvatarKey: users.avatarKey,
+    })
+    .from(posts)
+    .innerJoin(users, eq(posts.authorId, users.id))
+    .where(and(...conditions))
+    .orderBy(desc(posts.createdAt))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const postIds = page.map((row) => row.id);
+  const [mediaMap, { counts, mine }, commentCountMap] = await Promise.all([
+    attachMedia(database, page),
+    attachReactions(database, postIds, viewerId),
+    countCommentsForPosts(database, postIds),
+  ]);
+  const lastRow = page[page.length - 1];
+
+  return {
+    items: page.map((row) => toFeedPost(row, mediaMap, counts, mine, commentCountMap)),
+    nextCursor: hasMore && lastRow ? lastRow.createdAt.toISOString() : null,
+  };
+}
+
+export interface ListBusinessPostsInput {
+  businessId: string;
+  cursor?: string | undefined;
+  limit: number;
+  viewerId: string;
+}
+
+/** FR-BIZ-02: same shape as listGroupPosts, scoped to one business page's board. */
+export async function listBusinessPosts(
+  database: Database,
+  { businessId, cursor, limit, viewerId }: ListBusinessPostsInput,
+): Promise<FeedPage> {
+  const conditions = [
+    eq(posts.contextType, "business"),
+    eq(posts.contextId, businessId),
     isNull(posts.deletedAt),
   ];
   if (cursor) conditions.push(lt(posts.createdAt, new Date(cursor)));

@@ -78,6 +78,13 @@
       "when": 1791488269453,
       "tag": "0010_chubby_kid_colt",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1791491133194,
+      "tag": "0011_simple_giant_girl",
+      "breakpoints": true
     }
   ]
 }

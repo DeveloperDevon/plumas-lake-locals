@@ -2,7 +2,7 @@ import { type Database, schema } from "@plumas/db";
 import type { AdminDeleteTargetType, ReportReason, ReportTargetType } from "@plumas/validators";
 import { desc, eq, inArray, isNull } from "drizzle-orm";
 
-const { auditLog, comments, posts, reports, users } = schema;
+const { auditLog, businesses, comments, posts, reports, users } = schema;
 
 export class ModerationNotFoundError extends Error {
   constructor(message = "That no longer exists.") {
@@ -101,8 +101,11 @@ export async function listOpenReports(
   const postIds = rows.filter((row) => row.targetType === "post").map((row) => row.targetId);
   const commentIds = rows.filter((row) => row.targetType === "comment").map((row) => row.targetId);
   const profileIds = rows.filter((row) => row.targetType === "profile").map((row) => row.targetId);
+  const businessIds = rows
+    .filter((row) => row.targetType === "business")
+    .map((row) => row.targetId);
 
-  const [postRows, commentRows, profileRows] = await Promise.all([
+  const [postRows, commentRows, profileRows, businessRows] = await Promise.all([
     postIds.length > 0
       ? database
           .select({ id: posts.id, body: posts.body })
@@ -121,16 +124,24 @@ export async function listOpenReports(
           .from(users)
           .where(inArray(users.id, profileIds))
       : Promise.resolve([]),
+    businessIds.length > 0
+      ? database
+          .select({ id: businesses.id, name: businesses.name })
+          .from(businesses)
+          .where(inArray(businesses.id, businessIds))
+      : Promise.resolve([]),
   ]);
   const postBodyById = new Map(postRows.map((row) => [row.id, row.body]));
   const commentBodyById = new Map(commentRows.map((row) => [row.id, row.body]));
   const profileNameById = new Map(profileRows.map((row) => [row.id, row.displayName]));
+  const businessNameById = new Map(businessRows.map((row) => [row.id, row.name]));
 
   return rows.map((row) => {
     let preview: string | null = null;
     if (row.targetType === "post") preview = postBodyById.get(row.targetId) ?? null;
     else if (row.targetType === "comment") preview = commentBodyById.get(row.targetId) ?? null;
     else if (row.targetType === "profile") preview = profileNameById.get(row.targetId) ?? null;
+    else if (row.targetType === "business") preview = businessNameById.get(row.targetId) ?? null;
 
     return {
       id: row.id,

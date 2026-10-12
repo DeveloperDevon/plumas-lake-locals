@@ -1,4 +1,5 @@
 import {
+  BusinessForbiddenError,
   countPostMedia,
   createMedia,
   getOwnedPost,
@@ -6,6 +7,9 @@ import {
   PostForbiddenError,
   PostNotFoundError,
   requireGroupAdmin,
+  requireManager,
+  setBusinessCover,
+  setBusinessLogo,
   setGroupCover,
   setUserAvatar,
   setUserCover,
@@ -51,6 +55,7 @@ export const Route = createFileRoute("/api/media/upload")({
         // upload fails fast rather than burning Photon CPU time first.
         let postId: string | undefined;
         let groupId: string | undefined;
+        let businessId: string | undefined;
         if (purpose === "group_cover") {
           const groupIdResult = z.string().uuid().safeParse(form.get("groupId"));
           if (!groupIdResult.success) {
@@ -61,6 +66,25 @@ export const Route = createFileRoute("/api/media/upload")({
             await requireGroupAdmin(db, groupId, user.id);
           } catch (error) {
             if (error instanceof GroupForbiddenError) {
+              return Response.json({ ok: false, message: error.message }, { status: 403 });
+            }
+            throw error;
+          }
+        }
+        if (
+          purpose === "business_logo" ||
+          purpose === "business_cover" ||
+          purpose === "business_gallery"
+        ) {
+          const businessIdResult = z.string().uuid().safeParse(form.get("businessId"));
+          if (!businessIdResult.success) {
+            return Response.json({ ok: false, message: "Missing businessId." }, { status: 400 });
+          }
+          businessId = businessIdResult.data;
+          try {
+            await requireManager(db, businessId, user.id);
+          } catch (error) {
+            if (error instanceof BusinessForbiddenError) {
               return Response.json({ ok: false, message: error.message }, { status: 403 });
             }
             throw error;
@@ -110,6 +134,7 @@ export const Route = createFileRoute("/api/media/upload")({
           width: processed.width,
           height: processed.height,
           postId: postId ?? null,
+          businessId: purpose === "business_gallery" ? (businessId ?? null) : null,
         });
 
         if (purpose === "avatar") {
@@ -118,6 +143,10 @@ export const Route = createFileRoute("/api/media/upload")({
           await setUserCover(db, user.id, processed.r2KeyPrefix);
         } else if (purpose === "group_cover" && groupId) {
           await setGroupCover(db, groupId, processed.r2KeyPrefix);
+        } else if (purpose === "business_logo" && businessId) {
+          await setBusinessLogo(db, businessId, processed.r2KeyPrefix);
+        } else if (purpose === "business_cover" && businessId) {
+          await setBusinessCover(db, businessId, processed.r2KeyPrefix);
         }
 
         return Response.json({
