@@ -48,6 +48,10 @@ export const users = pgTable(
     // @plumas/validators' fieldVisibilitySchema, not a DB constraint (same reasoning as
     // moderation.ts's `details` jsonb column).
     fieldVisibility: jsonb("field_visibility"),
+    // FR-NOT-02: per-NotificationType opt-out - null means everything on (the opt-out default);
+    // an explicit `false` for a type turns its email off. Validated by @plumas/validators, not
+    // a DB constraint, same reasoning as fieldVisibility right above.
+    notificationEmailPreferences: jsonb("notification_email_preferences"),
     // FR-REL-03: used only to pick the gendered word in relationship labels (Son/Daughter,
     // Mother/Father, ...) shown on someone else's profile - not a general identity field.
     relationshipLabelGender: relationshipLabelGenderEnum("relationship_label_gender")

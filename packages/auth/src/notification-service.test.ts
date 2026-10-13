@@ -1,16 +1,21 @@
 import { createDb, schema } from "@plumas/db";
-import { describe, expect, it } from "vitest";
+import { sendNotificationEmail } from "@plumas/email";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { createComment } from "./comment-service";
 import {
   countUnreadNotifications,
   createNotification,
+  getNotificationEmailPreferences,
   listNotificationsForUser,
   markAllNotificationsRead,
   markNotificationRead,
+  setNotificationEmailPreferences,
 } from "./notification-service";
 import { createPost, setPostReaction } from "./post-service";
 import { requestRelationship } from "./relationship-service";
+
+vi.mock("@plumas/email", () => ({ sendNotificationEmail: vi.fn() }));
 
 const { users } = schema;
 
@@ -26,6 +31,11 @@ function uniqueEmail(label: string): string {
 
 describe("notification-service (integration, against the real local Postgres)", () => {
   const db = createDb(mustGetEnv("DATABASE_URL"));
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.mocked(sendNotificationEmail).mockClear();
+  });
 
   async function makeMember() {
     const [user] = await db
@@ -130,5 +140,54 @@ describe("notification-service (integration, against the real local Postgres)", 
     const request = notifications.items.find((item) => item.type === "relationship_request");
     expect(request).toBeDefined();
     expect((request?.payload as Record<string, unknown>).actorId).toBe(from.id);
+  });
+
+  it("emails a notification by default, and skips it once that type is opted out", async () => {
+    vi.stubEnv("PUBLIC_APP_URL", "https://app.test");
+    const member = await makeMember();
+
+    await createNotification(db, {
+      userId: member.id,
+      type: "comment_on_post",
+      payload: { actorName: "Maria L.", excerpt: "Nice!" },
+    });
+    expect(sendNotificationEmail).toHaveBeenCalledWith(
+      expect.objectContaining({
+        to: member.email,
+        title: "Maria L. commented on your post",
+        body: "Nice!",
+        url: "https://app.test/feed",
+      }),
+    );
+
+    await setNotificationEmailPreferences(db, member.id, { comment_on_post: false });
+    vi.mocked(sendNotificationEmail).mockClear();
+
+    await createNotification(db, {
+      userId: member.id,
+      type: "comment_on_post",
+      payload: { actorName: "Maria L.", excerpt: "Again!" },
+    });
+    expect(sendNotificationEmail).not.toHaveBeenCalled();
+
+    // The in-app notification still lands regardless of the email preference.
+    const afterOptOut = await unreadFor(member.id);
+    expect(afterOptOut.items.some((item) => item.type === "comment_on_post")).toBe(true);
+  });
+
+  it("does not email when PUBLIC_APP_URL is unset", async () => {
+    vi.stubEnv("PUBLIC_APP_URL", "");
+    const member = await makeMember();
+
+    await createNotification(db, { userId: member.id, type: "dm_message", payload: {} });
+    expect(sendNotificationEmail).not.toHaveBeenCalled();
+  });
+
+  it("getNotificationEmailPreferences/setNotificationEmailPreferences round-trip", async () => {
+    const member = await makeMember();
+    expect(await getNotificationEmailPreferences(db, member.id)).toEqual({});
+
+    await setNotificationEmailPreferences(db, member.id, { dm_message: false });
+    expect(await getNotificationEmailPreferences(db, member.id)).toEqual({ dm_message: false });
   });
 });

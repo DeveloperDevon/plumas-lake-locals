@@ -4,6 +4,7 @@ import type { ReactElement } from "react";
 import { resendClient } from "./client";
 import { InviteEmail } from "./templates/InviteEmail";
 import { MagicLinkEmail } from "./templates/MagicLinkEmail";
+import { NotificationEmail } from "./templates/NotificationEmail";
 
 const DEFAULT_FROM = "Plumas Lake Locals <hello@plumaslakelocals.com>";
 
@@ -34,6 +35,23 @@ export async function sendInviteEmail({
     `${inviterName} invited you to Plumas Lake Locals`,
     <InviteEmail url={url} inviterName={inviterName} note={note} />,
   );
+}
+
+export interface SendNotificationEmailInput {
+  to: string;
+  title: string;
+  body: string;
+  url: string;
+}
+
+/** FR-NOT-02: one notification email, immediately - the daily digest option is deferred (no scheduled-job infrastructure exists in this monorepo). */
+export async function sendNotificationEmail({
+  to,
+  title,
+  body,
+  url,
+}: SendNotificationEmailInput): Promise<void> {
+  await send(to, title, <NotificationEmail title={title} body={body} url={url} />);
 }
 
 /**

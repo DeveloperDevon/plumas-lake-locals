@@ -7,6 +7,7 @@ const tabs = [
   { to: "/settings/appearance", label: "Appearance" },
   { to: "/settings/invites", label: "Invites" },
   { to: "/settings/messaging", label: "Messaging" },
+  { to: "/settings/notifications", label: "Notifications" },
   { to: "/settings/account", label: "Account" },
 ];
 
