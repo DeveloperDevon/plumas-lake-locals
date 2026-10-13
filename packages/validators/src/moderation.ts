@@ -3,12 +3,18 @@ import { z } from "zod";
 import { uuidSchema } from "./common";
 
 /**
- * FR-MOD-01: what can be reported today. The PRD also lists groups, listings and
- * conversations, none of which exist yet - reports.targetType is free text in the DB
- * specifically so later phases can extend this list without a migration, same reasoning
- * already used for notifications.type.
+ * FR-MOD-01: what can be reported today. The PRD also lists groups and conversations, neither
+ * of which exist yet - reports.targetType is free text in the DB specifically so later phases
+ * can extend this list without a migration, same reasoning already used for notifications.type.
  */
-export const reportTargetTypes = ["post", "comment", "profile", "business", "event"] as const;
+export const reportTargetTypes = [
+  "post",
+  "comment",
+  "profile",
+  "business",
+  "event",
+  "listing",
+] as const;
 export type ReportTargetType = (typeof reportTargetTypes)[number];
 export const reportTargetTypeSchema = z.enum(reportTargetTypes);
 
@@ -43,10 +49,10 @@ export type SuspendUserInput = z.infer<typeof suspendUserSchema>;
 export const unsuspendUserSchema = z.object({ userId: uuidSchema });
 export type UnsuspendUserInput = z.infer<typeof unsuspendUserSchema>;
 
-// post/comment/event are admin-deletable - the same scope as reportTargetTypes minus profile
-// and business (there's no "delete a profile" concept - suspend covers that; a business page
-// is unpublished, not deleted, via business-service.ts's own admin action).
-export const adminDeleteTargetTypes = ["post", "comment", "event"] as const;
+// post/comment/event/listing are admin-deletable - the same scope as reportTargetTypes minus
+// profile and business (there's no "delete a profile" concept - suspend covers that; a business
+// page is unpublished, not deleted, via business-service.ts's own admin action).
+export const adminDeleteTargetTypes = ["post", "comment", "event", "listing"] as const;
 export type AdminDeleteTargetType = (typeof adminDeleteTargetTypes)[number];
 
 export const adminDeleteContentSchema = z.object({

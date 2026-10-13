@@ -21,6 +21,7 @@ export type NotificationType =
   | "group_join_declined"
   | "invite_accepted"
   | "comment_on_event"
+  | "comment_on_listing"
   | "dm_message"
   | "dm_added_to_group";
 

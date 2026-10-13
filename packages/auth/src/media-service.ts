@@ -14,6 +14,7 @@ export interface CreateMediaInput {
   albumId?: string | null;
   postId?: string | null;
   businessId?: string | null;
+  listingId?: string | null;
 }
 
 export async function createMedia(database: Database, input: CreateMediaInput) {
@@ -24,6 +25,7 @@ export async function createMedia(database: Database, input: CreateMediaInput) {
       albumId: input.albumId ?? null,
       postId: input.postId ?? null,
       businessId: input.businessId ?? null,
+      listingId: input.listingId ?? null,
     })
     .returning();
   if (!row) throw new Error("Failed to create media row");
@@ -36,6 +38,15 @@ export async function countPostMedia(database: Database, postId: string): Promis
     .select({ value: count() })
     .from(media)
     .where(eq(media.postId, postId));
+  return row?.value ?? 0;
+}
+
+/** FR-MKT-01: the upload route's 10-photo-per-listing cap. */
+export async function countListingMedia(database: Database, listingId: string): Promise<number> {
+  const [row] = await database
+    .select({ value: count() })
+    .from(media)
+    .where(eq(media.listingId, listingId));
   return row?.value ?? 0;
 }
 

@@ -5,6 +5,7 @@ export * from "./dm-service";
 export * from "./event-service";
 export * from "./group-service";
 export * from "./invite-service";
+export * from "./listing-service";
 export * from "./media-service";
 export * from "./moderation-service";
 export * from "./notification-service";

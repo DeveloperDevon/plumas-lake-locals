@@ -1,14 +1,17 @@
 import {
   BusinessForbiddenError,
+  countListingMedia,
   countPostMedia,
   createMedia,
   EventForbiddenError,
   getOwnedPost,
   GroupForbiddenError,
+  ListingForbiddenError,
   PostForbiddenError,
   PostNotFoundError,
   requireEventCreator,
   requireGroupAdmin,
+  requireListingSeller,
   requireManager,
   setBusinessCover,
   setBusinessLogo,
@@ -17,7 +20,12 @@ import {
   setUserAvatar,
   setUserCover,
 } from "@plumas/auth";
-import { MAX_POST_IMAGES, MAX_UPLOAD_BYTES, mediaPurposeSchema } from "@plumas/validators";
+import {
+  MAX_LISTING_PHOTOS,
+  MAX_POST_IMAGES,
+  MAX_UPLOAD_BYTES,
+  mediaPurposeSchema,
+} from "@plumas/validators";
 import { createFileRoute } from "@tanstack/react-router";
 import { z } from "zod";
 
@@ -60,6 +68,7 @@ export const Route = createFileRoute("/api/media/upload")({
         let groupId: string | undefined;
         let businessId: string | undefined;
         let eventId: string | undefined;
+        let listingId: string | undefined;
         if (purpose === "event_cover") {
           const eventIdResult = z.string().uuid().safeParse(form.get("eventId"));
           if (!eventIdResult.success) {
@@ -134,6 +143,31 @@ export const Route = createFileRoute("/api/media/upload")({
             );
           }
         }
+        if (purpose === "listing_photo") {
+          const listingIdResult = z.string().uuid().safeParse(form.get("listingId"));
+          if (!listingIdResult.success) {
+            return Response.json({ ok: false, message: "Missing listingId." }, { status: 400 });
+          }
+          listingId = listingIdResult.data;
+          try {
+            await requireListingSeller(db, listingId, user.id);
+          } catch (error) {
+            if (error instanceof ListingForbiddenError) {
+              return Response.json({ ok: false, message: error.message }, { status: 403 });
+            }
+            throw error;
+          }
+          const existingCount = await countListingMedia(db, listingId);
+          if (existingCount >= MAX_LISTING_PHOTOS) {
+            return Response.json(
+              {
+                ok: false,
+                message: `A listing can have at most ${MAX_LISTING_PHOTOS.toString()} photos.`,
+              },
+              { status: 400 },
+            );
+          }
+        }
 
         const bytes = new Uint8Array(await file.arrayBuffer());
         const mediaId = crypto.randomUUID();
@@ -154,6 +188,7 @@ export const Route = createFileRoute("/api/media/upload")({
           height: processed.height,
           postId: postId ?? null,
           businessId: purpose === "business_gallery" ? (businessId ?? null) : null,
+          listingId: listingId ?? null,
         });
 
         if (purpose === "avatar") {

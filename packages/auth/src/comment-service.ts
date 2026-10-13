@@ -142,7 +142,7 @@ export async function createComment(database: Database, input: CreateCommentInpu
 export async function notifyAboutComment(
   database: Database,
   input: {
-    targetType: "post" | "event";
+    targetType: "post" | "event" | "listing";
     targetId: string;
     ownerId: string | null;
     commenterId: string;
@@ -161,7 +161,12 @@ export async function notifyAboutComment(
   if (ownerId && ownerId !== input.commenterId) {
     await createNotification(database, {
       userId: ownerId,
-      type: input.targetType === "post" ? "comment_on_post" : "comment_on_event",
+      type:
+        input.targetType === "post"
+          ? "comment_on_post"
+          : input.targetType === "event"
+            ? "comment_on_event"
+            : "comment_on_listing",
       payload: {
         actorId: input.commenterId,
         actorName,

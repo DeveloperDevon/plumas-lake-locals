@@ -7,6 +7,7 @@ import {
   Newspaper,
   Settings as SettingsIcon,
   Shield,
+  ShoppingBag,
   Store,
   Users,
 } from "lucide-react";
@@ -25,6 +26,7 @@ function navItems(userId: string, isAdmin: boolean, unreadCount: number): NavIte
     { to: "/groups", label: "Groups", icon: Users },
     { to: "/businesses", label: "Businesses", icon: Store },
     { to: "/calendar", label: "Calendar", icon: CalendarDays },
+    { to: "/marketplace", label: "Marketplace", icon: ShoppingBag },
     { to: "/messages", label: "Messages", icon: MessageCircle },
     { to: "/notifications", label: "Notifications", icon: Bell, badge: unreadCount },
     { to: `/profile/${userId}`, label: "Profile", icon: CircleUserRound },

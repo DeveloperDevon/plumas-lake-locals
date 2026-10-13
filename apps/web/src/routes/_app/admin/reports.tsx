@@ -85,7 +85,8 @@ function Reports() {
                 </Button>
                 {report.targetType === "post" ||
                 report.targetType === "comment" ||
-                report.targetType === "event" ? (
+                report.targetType === "event" ||
+                report.targetType === "listing" ? (
                   <DeleteContentButton
                     targetType={report.targetType}
                     targetId={report.targetId}

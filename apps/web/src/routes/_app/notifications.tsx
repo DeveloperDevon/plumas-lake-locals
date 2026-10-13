@@ -41,6 +41,8 @@ function describeNotification(row: NotificationRow): string {
       return `${actor} commented on your post`;
     case "comment_on_event":
       return `${actor} commented on your event`;
+    case "comment_on_listing":
+      return `${actor} commented on your listing`;
     case "reply_to_comment":
       return `${actor} replied to your comment`;
     case "reaction_on_post":
@@ -69,13 +71,16 @@ function useGoToTarget() {
     const p = payloadOf(row);
     switch (row.type) {
       case "comment_on_event":
+      case "comment_on_listing":
       case "reply_to_comment": {
-        if (str(p, "targetType") === "event") {
-          const eventId = str(p, "targetId");
-          if (eventId) {
-            await navigate({ to: "/calendar/$eventId", params: { eventId } });
-            return;
-          }
+        const targetId = str(p, "targetId");
+        if (str(p, "targetType") === "event" && targetId) {
+          await navigate({ to: "/calendar/$eventId", params: { eventId: targetId } });
+          return;
+        }
+        if (str(p, "targetType") === "listing" && targetId) {
+          await navigate({ to: "/marketplace/$listingId", params: { listingId: targetId } });
+          return;
         }
         await navigate({ to: "/feed" });
         return;
