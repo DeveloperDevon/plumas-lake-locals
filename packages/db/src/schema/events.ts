@@ -24,6 +24,7 @@ export const events = pgTable(
     rrule: text("rrule"),
     location: text("location"),
     coverKey: text("cover_key"),
+    coverAltText: text("cover_alt_text"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [index("events_starts_at_idx").on(t.startsAt)],

@@ -27,9 +27,12 @@ export const users = pgTable(
     emailVerified: boolean("email_verified").notNull().default(false),
     image: text("image"),
     avatarKey: text("avatar_key"),
+    // NFR-09: screen-reader description, prompted for (optionally) at upload time.
+    avatarAltText: text("avatar_alt_text"),
     // Populated starting with task #16's media/R2 pipeline - the column exists now so that
     // phase needs no migration of its own, same reasoning as avatarKey in Phase 0.
     coverKey: text("cover_key"),
+    coverAltText: text("cover_alt_text"),
     bio: text("bio"),
     // FR-PRO-01 (always visible, not covered by fieldVisibility below).
     street: text("street"),

@@ -4,6 +4,8 @@ import { itemCategories, serviceCategories } from "@plumas/validators";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 
+import type { StagedFile } from "../../../components/staged-photo-alt-text";
+import { StagedPhotoAltTextList } from "../../../components/staged-photo-alt-text";
 import { categoryLabels } from "../../../lib/listing-labels";
 import { uploadImage } from "../../../lib/upload-image";
 import { getMyBusinessesFn } from "../../../server/functions/business";
@@ -30,7 +32,7 @@ function NewListing() {
   const [priceUnit, setPriceUnit] = useState<ListingPriceUnit>("fixed");
   const [area, setArea] = useState("");
   const [businessId, setBusinessId] = useState("");
-  const [photoFiles, setPhotoFiles] = useState<File[]>([]);
+  const [photoFiles, setPhotoFiles] = useState<StagedFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -60,8 +62,11 @@ function NewListing() {
         },
       });
 
-      for (const file of photoFiles) {
-        await uploadImage(file, "listing_photo", { listingId: listing.id });
+      for (const { file, altText } of photoFiles) {
+        await uploadImage(file, "listing_photo", {
+          listingId: listing.id,
+          altText: altText || undefined,
+        });
       }
 
       await navigate({ to: "/marketplace/$listingId", params: { listingId: listing.id } });
@@ -205,6 +210,7 @@ function NewListing() {
           />
           {kind === "service" ? (
             <select
+              aria-label="Price model"
               value={priceUnit}
               className="h-11 rounded-md border border-border bg-background px-3 text-sm text-foreground"
               onChange={(event) => {
@@ -270,7 +276,9 @@ function NewListing() {
           onChange={(event) => {
             const files = [...(event.target.files ?? [])].slice(0, MAX_PHOTOS - photoFiles.length);
             event.target.value = "";
-            setPhotoFiles((previous) => [...previous, ...files].slice(0, MAX_PHOTOS));
+            setPhotoFiles((previous) =>
+              [...previous, ...files.map((file) => ({ file, altText: "" }))].slice(0, MAX_PHOTOS),
+            );
           }}
         />
         <Button
@@ -283,6 +291,7 @@ function NewListing() {
         >
           {photoFiles.length > 0 ? `${photoFiles.length.toString()} selected` : "Add photos"}
         </Button>
+        <StagedPhotoAltTextList files={photoFiles} onChange={setPhotoFiles} />
       </div>
 
       <p className="rounded-md bg-muted p-3 text-xs text-muted-foreground">

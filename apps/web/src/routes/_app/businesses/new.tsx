@@ -22,7 +22,9 @@ function NewBusiness() {
   const [website, setWebsite] = useState("");
   const [confirmed, setConfirmed] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [logoAltText, setLogoAltText] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverAltText, setCoverAltText] = useState("");
   const logoInputRef = useRef<HTMLInputElement>(null);
   const coverInputRef = useRef<HTMLInputElement>(null);
   const [creating, setCreating] = useState(false);
@@ -46,10 +48,16 @@ function NewBusiness() {
         },
       });
       if (logoFile) {
-        await uploadImage(logoFile, "business_logo", { businessId: business.id });
+        await uploadImage(logoFile, "business_logo", {
+          businessId: business.id,
+          altText: logoAltText || undefined,
+        });
       }
       if (coverFile) {
-        await uploadImage(coverFile, "business_cover", { businessId: business.id });
+        await uploadImage(coverFile, "business_cover", {
+          businessId: business.id,
+          altText: coverAltText || undefined,
+        });
       }
       await navigate({ to: "/businesses/$slug", params: { slug: business.slug } });
     } catch (createError) {
@@ -218,6 +226,18 @@ function NewBusiness() {
         >
           {logoFile ? logoFile.name : "Add a logo"}
         </Button>
+        {logoFile ? (
+          <input
+            type="text"
+            placeholder="Describe this image for screen readers (optional)"
+            value={logoAltText}
+            maxLength={300}
+            className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+            onChange={(event) => {
+              setLogoAltText(event.target.value);
+            }}
+          />
+        ) : null}
       </div>
 
       <div className="flex flex-col gap-1">
@@ -242,6 +262,18 @@ function NewBusiness() {
         >
           {coverFile ? coverFile.name : "Add a cover photo"}
         </Button>
+        {coverFile ? (
+          <input
+            type="text"
+            placeholder="Describe this image for screen readers (optional)"
+            value={coverAltText}
+            maxLength={300}
+            className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+            onChange={(event) => {
+              setCoverAltText(event.target.value);
+            }}
+          />
+        ) : null}
       </div>
 
       <label className="flex items-start gap-2 text-sm">

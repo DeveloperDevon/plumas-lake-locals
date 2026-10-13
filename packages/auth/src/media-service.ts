@@ -15,6 +15,7 @@ export interface CreateMediaInput {
   postId?: string | null;
   businessId?: string | null;
   listingId?: string | null;
+  altText?: string | null;
 }
 
 export async function createMedia(database: Database, input: CreateMediaInput) {
@@ -26,6 +27,7 @@ export async function createMedia(database: Database, input: CreateMediaInput) {
       postId: input.postId ?? null,
       businessId: input.businessId ?? null,
       listingId: input.listingId ?? null,
+      altText: input.altText ?? null,
     })
     .returning();
   if (!row) throw new Error("Failed to create media row");
@@ -51,31 +53,79 @@ export async function countListingMedia(database: Database, listingId: string): 
 }
 
 /** Scoped to userId by every caller - never a client-supplied id. */
-export async function setUserAvatar(database: Database, userId: string, avatarKey: string) {
-  await database.update(users).set({ avatarKey }).where(eq(users.id, userId));
+export async function setUserAvatar(
+  database: Database,
+  userId: string,
+  avatarKey: string,
+  altText?: string | null,
+) {
+  await database
+    .update(users)
+    .set({ avatarKey, avatarAltText: altText ?? null })
+    .where(eq(users.id, userId));
 }
 
-export async function setUserCover(database: Database, userId: string, coverKey: string) {
-  await database.update(users).set({ coverKey }).where(eq(users.id, userId));
+export async function setUserCover(
+  database: Database,
+  userId: string,
+  coverKey: string,
+  altText?: string | null,
+) {
+  await database
+    .update(users)
+    .set({ coverKey, coverAltText: altText ?? null })
+    .where(eq(users.id, userId));
 }
 
 /** FR-GRP-01: caller must already be verified as the group's owner/admin - see group-service.ts. */
-export async function setGroupCover(database: Database, groupId: string, coverKey: string) {
-  await database.update(groups).set({ coverKey }).where(eq(groups.id, groupId));
+export async function setGroupCover(
+  database: Database,
+  groupId: string,
+  coverKey: string,
+  altText?: string | null,
+) {
+  await database
+    .update(groups)
+    .set({ coverKey, coverAltText: altText ?? null })
+    .where(eq(groups.id, groupId));
 }
 
 /** FR-BIZ-01: caller must already be verified as a manager - see business-service.ts. */
-export async function setBusinessLogo(database: Database, businessId: string, logoKey: string) {
-  await database.update(businesses).set({ logoKey }).where(eq(businesses.id, businessId));
+export async function setBusinessLogo(
+  database: Database,
+  businessId: string,
+  logoKey: string,
+  altText?: string | null,
+) {
+  await database
+    .update(businesses)
+    .set({ logoKey, logoAltText: altText ?? null })
+    .where(eq(businesses.id, businessId));
 }
 
-export async function setBusinessCover(database: Database, businessId: string, coverKey: string) {
-  await database.update(businesses).set({ coverKey }).where(eq(businesses.id, businessId));
+export async function setBusinessCover(
+  database: Database,
+  businessId: string,
+  coverKey: string,
+  altText?: string | null,
+) {
+  await database
+    .update(businesses)
+    .set({ coverKey, coverAltText: altText ?? null })
+    .where(eq(businesses.id, businessId));
 }
 
 /** FR-CAL-01: caller must already be verified as the event's creator - see event-service.ts. */
-export async function setEventCover(database: Database, eventId: string, coverKey: string) {
-  await database.update(events).set({ coverKey }).where(eq(events.id, eventId));
+export async function setEventCover(
+  database: Database,
+  eventId: string,
+  coverKey: string,
+  altText?: string | null,
+) {
+  await database
+    .update(events)
+    .set({ coverKey, coverAltText: altText ?? null })
+    .where(eq(events.id, eventId));
 }
 
 export async function listUserMedia(database: Database, ownerId: string) {

@@ -18,6 +18,7 @@ function NewGroup() {
   const [category, setCategory] = useState("");
   const [visibility, setVisibility] = useState<GroupVisibility>("public");
   const [coverFile, setCoverFile] = useState<File | null>(null);
+  const [coverAltText, setCoverAltText] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +36,10 @@ function NewGroup() {
         },
       });
       if (coverFile) {
-        await uploadImage(coverFile, "group_cover", { groupId: group.id });
+        await uploadImage(coverFile, "group_cover", {
+          groupId: group.id,
+          altText: coverAltText || undefined,
+        });
       }
       await navigate({ to: "/groups/$slug", params: { slug: group.slug } });
     } catch (createError) {
@@ -148,6 +152,18 @@ function NewGroup() {
         >
           {coverFile ? coverFile.name : "Add a cover photo"}
         </Button>
+        {coverFile ? (
+          <input
+            type="text"
+            placeholder="Describe this image for screen readers (optional)"
+            value={coverAltText}
+            maxLength={300}
+            className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+            onChange={(event) => {
+              setCoverAltText(event.target.value);
+            }}
+          />
+        ) : null}
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}

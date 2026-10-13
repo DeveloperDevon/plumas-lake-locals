@@ -6,6 +6,8 @@ import { useServerFn } from "@tanstack/react-start";
 import { useRef, useState } from "react";
 
 import { categoryLabels, type FeedPostData, PostCard } from "../../components/post-card";
+import type { StagedFile } from "../../components/staged-photo-alt-text";
+import { StagedPhotoAltTextList } from "../../components/staged-photo-alt-text";
 import { uploadImage } from "../../lib/upload-image";
 import { createPostFn, getFeed } from "../../server/functions/posts";
 
@@ -28,7 +30,7 @@ function Feed() {
 
   const [body, setBody] = useState("");
   const [category, setCategory] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  const [files, setFiles] = useState<StagedFile[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [posting, setPosting] = useState(false);
   const [composeError, setComposeError] = useState<string | null>(null);
@@ -48,9 +50,9 @@ function Feed() {
       const post = await doCreatePost({
         data: { body, category: (category || undefined) as PostCategory | undefined },
       });
-      for (const file of files) {
+      for (const { file, altText } of files) {
         // Deliberately sequential - attaches to the post one image at a time.
-        await uploadImage(file, "post", { postId: post.id });
+        await uploadImage(file, "post", { postId: post.id, altText: altText || undefined });
       }
       setBody("");
       setCategory("");
@@ -92,6 +94,7 @@ function Feed() {
           />
           <div className="flex flex-wrap items-center gap-3">
             <select
+              aria-label="Category"
               className="h-11 rounded-md border border-border bg-background px-3 text-sm text-foreground"
               value={category}
               onChange={(event) => {
@@ -114,7 +117,7 @@ function Feed() {
               onChange={(event) => {
                 const selected = Array.from(event.target.files ?? []).slice(0, 10);
                 event.target.value = "";
-                setFiles(selected);
+                setFiles(selected.map((file) => ({ file, altText: "" })));
               }}
             />
             <Button
@@ -128,6 +131,7 @@ function Feed() {
               {files.length > 0 ? `${files.length.toString()} image(s) selected` : "Add images"}
             </Button>
           </div>
+          <StagedPhotoAltTextList files={files} onChange={setFiles} />
           {composeError ? <p className="text-sm text-destructive">{composeError}</p> : null}
           <Button
             type="button"

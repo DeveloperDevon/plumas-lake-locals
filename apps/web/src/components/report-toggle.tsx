@@ -50,6 +50,7 @@ export function ReportToggle({
   return (
     <div className="flex flex-wrap items-center gap-2 text-xs">
       <select
+        aria-label="Report reason"
         className="h-8 rounded-md border border-border bg-background px-2 text-xs text-foreground"
         value={reason}
         onChange={(event) => {

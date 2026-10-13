@@ -19,8 +19,10 @@ function SettingsLayout() {
           <Link
             key={tab.to}
             to={tab.to}
-            className="min-h-11 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-            activeProps={{ className: "bg-muted text-foreground" }}
+            // See nav.tsx's NavRail for why this is a data-[status=active]: variant rather than
+            // activeProps - two separately concatenated class strings fighting over the same
+            // CSS property silently lose to Tailwind's generated stylesheet order.
+            className="min-h-11 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground data-[status=active]:bg-muted data-[status=active]:text-foreground"
           >
             {tab.label}
           </Link>

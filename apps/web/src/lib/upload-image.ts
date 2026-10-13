@@ -39,6 +39,7 @@ export async function uploadImage(
     businessId?: string;
     eventId?: string;
     listingId?: string;
+    altText?: string | undefined;
   },
 ): Promise<UploadResult> {
   const prepared = await prepareImageFile(file);
@@ -51,6 +52,7 @@ export async function uploadImage(
   if (context?.eventId) form.append("eventId", context.eventId);
   if (context?.businessId) form.append("businessId", context.businessId);
   if (context?.listingId) form.append("listingId", context.listingId);
+  if (context?.altText) form.append("altText", context.altText);
 
   const response = await fetch("/api/media/upload", { method: "POST", body: form });
   const result: unknown = await response.json();

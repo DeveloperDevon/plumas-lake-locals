@@ -66,6 +66,8 @@ function BusinessDetail() {
   const [showSettings, setShowSettings] = useState(false);
   const [showAddManager, setShowAddManager] = useState(false);
   const [uploadingGallery, setUploadingGallery] = useState(false);
+  const [galleryPick, setGalleryPick] = useState<File | null>(null);
+  const [galleryAltText, setGalleryAltText] = useState("");
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const isManager = business.myRole !== null;
@@ -173,13 +175,8 @@ function BusinessDetail() {
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   event.target.value = "";
-                  if (!file) return;
-                  setUploadingGallery(true);
-                  void uploadImage(file, "business_gallery", { businessId: business.id })
-                    .then(refreshGallery)
-                    .finally(() => {
-                      setUploadingGallery(false);
-                    });
+                  setGalleryPick(file ?? null);
+                  setGalleryAltText("");
                 }}
               />
               <Button
@@ -189,12 +186,48 @@ function BusinessDetail() {
                 disabled={uploadingGallery}
                 onClick={() => galleryInputRef.current?.click()}
               >
-                {uploadingGallery ? "Uploading..." : "Add photo"}
+                {galleryPick ? galleryPick.name : "Add photo"}
               </Button>
             </>
           ) : null}
         </CardHeader>
-        <CardContent>
+        <CardContent className="flex flex-col gap-3">
+          {galleryPick ? (
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Describe this image for screen readers (optional)"
+                value={galleryAltText}
+                maxLength={300}
+                className="h-9 flex-1 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+                onChange={(event) => {
+                  setGalleryAltText(event.target.value);
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={uploadingGallery}
+                onClick={() => {
+                  setUploadingGallery(true);
+                  void uploadImage(galleryPick, "business_gallery", {
+                    businessId: business.id,
+                    altText: galleryAltText || undefined,
+                  })
+                    .then(refreshGallery)
+                    .then(() => {
+                      setGalleryPick(null);
+                      setGalleryAltText("");
+                    })
+                    .finally(() => {
+                      setUploadingGallery(false);
+                    });
+                }}
+              >
+                {uploadingGallery ? "Uploading..." : "Upload"}
+              </Button>
+            </div>
+          ) : null}
           {gallery.length === 0 ? (
             <p className="text-sm text-muted-foreground">No photos yet.</p>
           ) : (
@@ -203,7 +236,7 @@ function BusinessDetail() {
                 <img
                   key={item.id}
                   src={mediaUrl(item.r2Key, "thumbnail")}
-                  alt=""
+                  alt={item.altText ?? ""}
                   className="aspect-square w-full rounded-md object-cover"
                 />
               ))}
@@ -256,7 +289,7 @@ function BusinessHeader({ business, isManager }: { business: BusinessView; isMan
         {business.coverKey ? (
           <img
             src={mediaUrl(business.coverKey, "medium")}
-            alt=""
+            alt={business.coverAltText ?? ""}
             className="h-40 w-full rounded-md object-cover"
           />
         ) : (
@@ -268,7 +301,7 @@ function BusinessHeader({ business, isManager }: { business: BusinessView; isMan
           {business.logoKey ? (
             <img
               src={mediaUrl(business.logoKey, "thumbnail")}
-              alt=""
+              alt={business.logoAltText ?? ""}
               className="h-12 w-12 shrink-0 rounded-md object-cover"
             />
           ) : null}

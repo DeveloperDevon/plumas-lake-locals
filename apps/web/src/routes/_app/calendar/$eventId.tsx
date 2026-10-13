@@ -114,7 +114,7 @@ function EventDetail() {
           {event.coverKey ? (
             <img
               src={mediaUrl(event.coverKey, "medium")}
-              alt=""
+              alt={event.coverAltText ?? ""}
               className="h-40 w-full rounded-md object-cover"
             />
           ) : (

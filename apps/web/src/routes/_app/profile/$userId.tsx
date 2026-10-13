@@ -56,6 +56,8 @@ function ProfileView() {
   const { userId } = Route.useParams();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
+  const [galleryPick, setGalleryPick] = useState<File | null>(null);
+  const [galleryAltText, setGalleryAltText] = useState("");
   const [uploadState, setUploadState] = useState<
     { kind: "idle" } | { kind: "uploading" } | { kind: "error"; message: string }
   >({ kind: "idle" });
@@ -75,7 +77,7 @@ function ProfileView() {
       {profile.coverKey ? (
         <img
           src={mediaUrl(profile.coverKey, "medium")}
-          alt=""
+          alt={profile.coverAltText ?? ""}
           className="h-40 w-full rounded-md object-cover"
         />
       ) : null}
@@ -84,7 +86,7 @@ function ProfileView() {
           {profile.avatarKey ? (
             <img
               src={mediaUrl(profile.avatarKey, "thumbnail")}
-              alt=""
+              alt={profile.avatarAltText ?? ""}
               className="h-16 w-16 rounded-full object-cover"
             />
           ) : (
@@ -200,19 +202,8 @@ function ProfileView() {
                 onChange={(event) => {
                   const file = event.target.files?.[0];
                   event.target.value = "";
-                  if (!file) return;
-                  setUploadState({ kind: "uploading" });
-                  void uploadImage(file, "gallery")
-                    .then(() => {
-                      setUploadState({ kind: "idle" });
-                      return router.invalidate();
-                    })
-                    .catch((error: unknown) => {
-                      setUploadState({
-                        kind: "error",
-                        message: error instanceof Error ? error.message : "Upload failed.",
-                      });
-                    });
+                  setGalleryPick(file ?? null);
+                  setGalleryAltText("");
                 }}
               />
               <Button
@@ -224,12 +215,49 @@ function ProfileView() {
                   inputRef.current?.click();
                 }}
               >
-                {uploadState.kind === "uploading" ? "Uploading..." : "Add photo"}
+                {galleryPick ? galleryPick.name : "Add photo"}
               </Button>
             </>
           ) : null}
         </CardHeader>
         <CardContent>
+          {profile.isOwner && galleryPick ? (
+            <div className="mb-3 flex items-center gap-2">
+              <input
+                type="text"
+                placeholder="Describe this image for screen readers (optional)"
+                value={galleryAltText}
+                maxLength={300}
+                className="h-9 flex-1 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+                onChange={(event) => {
+                  setGalleryAltText(event.target.value);
+                }}
+              />
+              <Button
+                type="button"
+                size="sm"
+                disabled={uploadState.kind === "uploading"}
+                onClick={() => {
+                  setUploadState({ kind: "uploading" });
+                  void uploadImage(galleryPick, "gallery", { altText: galleryAltText || undefined })
+                    .then(() => {
+                      setUploadState({ kind: "idle" });
+                      setGalleryPick(null);
+                      setGalleryAltText("");
+                      return router.invalidate();
+                    })
+                    .catch((error: unknown) => {
+                      setUploadState({
+                        kind: "error",
+                        message: error instanceof Error ? error.message : "Upload failed.",
+                      });
+                    });
+                }}
+              >
+                {uploadState.kind === "uploading" ? "Uploading..." : "Upload"}
+              </Button>
+            </div>
+          ) : null}
           {uploadState.kind === "error" ? (
             <p className="mb-3 text-sm text-destructive">{uploadState.message}</p>
           ) : null}
@@ -243,7 +271,7 @@ function ProfileView() {
                 <img
                   key={item.id}
                   src={mediaUrl(item.r2Key, "thumbnail")}
-                  alt=""
+                  alt={item.altText ?? ""}
                   className="aspect-square w-full rounded-md object-cover"
                 />
               ))}
@@ -340,6 +368,7 @@ function RelationshipWidget({
         <CardContent className="flex flex-wrap items-center gap-3 pt-6">
           <span className="text-sm text-muted-foreground">I am their</span>
           <select
+            aria-label="Relationship type"
             className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground"
             value={type}
             onChange={(event) => {

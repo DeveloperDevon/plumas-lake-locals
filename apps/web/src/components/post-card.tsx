@@ -44,7 +44,7 @@ export interface FeedPostData {
   authorId: string;
   authorDisplayName: string;
   authorAvatarKey: string | null;
-  media: { id: string; r2Key: string; width: number; height: number }[];
+  media: { id: string; r2Key: string; width: number; height: number; altText: string | null }[];
   reactionCounts: Record<ReactionType, number>;
   myReaction: ReactionType | null;
   commentCount: number;
@@ -250,7 +250,7 @@ export function PostCard({
               <img
                 key={item.id}
                 src={mediaUrl(item.r2Key, "medium")}
-                alt=""
+                alt={item.altText ?? ""}
                 className="w-full rounded-md object-cover"
               />
             ))}

@@ -12,4 +12,11 @@ export default defineConfig({
     tanstackStart(),
     viteReact(),
   ],
+  server: {
+    // Lets e2e/load's k6 script (run via `docker run ... grafana/k6`, not installed locally)
+    // reach this dev server as host.docker.internal on Docker Desktop (macOS/Windows) - Vite's
+    // Host-header check otherwise 403s requests whose Host doesn't match localhost. Dev-only:
+    // `server` has no effect on a production build.
+    allowedHosts: ["host.docker.internal"],
+  },
 });

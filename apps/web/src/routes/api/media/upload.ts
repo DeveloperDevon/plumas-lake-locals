@@ -61,6 +61,9 @@ export const Route = createFileRoute("/api/media/upload")({
         }
         const purpose = purposeResult.data;
         const db = getDb();
+        const altTextRaw = form.get("altText");
+        const altText =
+          typeof altTextRaw === "string" && altTextRaw.trim() ? altTextRaw.trim() : null;
 
         // Checked before the (comparatively expensive) image processing step, so a doomed
         // upload fails fast rather than burning Photon CPU time first.
@@ -189,20 +192,21 @@ export const Route = createFileRoute("/api/media/upload")({
           postId: postId ?? null,
           businessId: purpose === "business_gallery" ? (businessId ?? null) : null,
           listingId: listingId ?? null,
+          altText,
         });
 
         if (purpose === "avatar") {
-          await setUserAvatar(db, user.id, processed.r2KeyPrefix);
+          await setUserAvatar(db, user.id, processed.r2KeyPrefix, altText);
         } else if (purpose === "cover") {
-          await setUserCover(db, user.id, processed.r2KeyPrefix);
+          await setUserCover(db, user.id, processed.r2KeyPrefix, altText);
         } else if (purpose === "group_cover" && groupId) {
-          await setGroupCover(db, groupId, processed.r2KeyPrefix);
+          await setGroupCover(db, groupId, processed.r2KeyPrefix, altText);
         } else if (purpose === "business_logo" && businessId) {
-          await setBusinessLogo(db, businessId, processed.r2KeyPrefix);
+          await setBusinessLogo(db, businessId, processed.r2KeyPrefix, altText);
         } else if (purpose === "business_cover" && businessId) {
-          await setBusinessCover(db, businessId, processed.r2KeyPrefix);
+          await setBusinessCover(db, businessId, processed.r2KeyPrefix, altText);
         } else if (purpose === "event_cover" && eventId) {
-          await setEventCover(db, eventId, processed.r2KeyPrefix);
+          await setEventCover(db, eventId, processed.r2KeyPrefix, altText);
         }
 
         return Response.json({

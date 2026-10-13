@@ -10,6 +10,7 @@ export const groups = pgTable("groups", {
   description: text("description"),
   category: text("category"),
   coverKey: text("cover_key"),
+  coverAltText: text("cover_alt_text"),
   ownerId: uuid("owner_id")
     .notNull()
     .references(() => users.id),

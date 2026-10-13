@@ -96,6 +96,7 @@ export interface ListingPhoto {
   r2Key: string;
   width: number;
   height: number;
+  altText: string | null;
 }
 
 export interface ListingView {
@@ -136,7 +137,13 @@ async function attachListingPhotos(
   for (const row of rows) {
     if (!row.listingId) continue;
     const list = map.get(row.listingId) ?? [];
-    list.push({ id: row.id, r2Key: row.r2Key, width: row.width ?? 0, height: row.height ?? 0 });
+    list.push({
+      id: row.id,
+      r2Key: row.r2Key,
+      width: row.width ?? 0,
+      height: row.height ?? 0,
+      altText: row.altText,
+    });
     map.set(row.listingId, list);
   }
   return map;

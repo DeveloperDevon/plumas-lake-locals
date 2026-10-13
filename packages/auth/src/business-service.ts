@@ -123,7 +123,9 @@ export interface BusinessView {
   description: string | null;
   category: string | null;
   logoKey: string | null;
+  logoAltText: string | null;
   coverKey: string | null;
+  coverAltText: string | null;
   phone: string | null;
   email: string | null;
   website: string | null;
@@ -157,7 +159,9 @@ export async function getBusinessBySlug(
     description: row.description,
     category: row.category,
     logoKey: row.logoKey,
+    logoAltText: row.logoAltText,
     coverKey: row.coverKey,
+    coverAltText: row.coverAltText,
     phone: row.phone,
     email: row.email,
     website: row.website,

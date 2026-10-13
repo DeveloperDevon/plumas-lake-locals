@@ -353,7 +353,7 @@ function GroupHeader({
         {group.coverKey ? (
           <img
             src={mediaUrl(group.coverKey, "medium")}
-            alt=""
+            alt={group.coverAltText ?? ""}
             className="h-40 w-full rounded-md object-cover"
           />
         ) : (
@@ -661,6 +661,7 @@ function SettingsPanel({
           <div className="flex flex-col gap-2 border-t border-border pt-3">
             <p className="text-sm font-medium">Transfer ownership</p>
             <select
+              aria-label="Transfer ownership to"
               value={transferTarget}
               className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground"
               onChange={(event) => {

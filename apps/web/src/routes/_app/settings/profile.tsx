@@ -22,14 +22,18 @@ function ImageUploadButton({
   label,
   purpose,
   currentKey,
+  currentAltText,
   onUploaded,
 }: {
   label: string;
   purpose: "avatar" | "cover";
   currentKey: string | null;
+  currentAltText: string | null;
   onUploaded: () => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
+  const [pickedFile, setPickedFile] = useState<File | null>(null);
+  const [altText, setAltText] = useState("");
   const [status, setStatus] = useState<
     { kind: "idle" } | { kind: "uploading" } | { kind: "error"; message: string }
   >({ kind: "idle" });
@@ -39,7 +43,7 @@ function ImageUploadButton({
       {currentKey ? (
         <img
           src={mediaUrl(currentKey, "thumbnail")}
-          alt=""
+          alt={currentAltText ?? ""}
           className="h-16 w-16 rounded-md object-cover"
         />
       ) : (
@@ -54,19 +58,8 @@ function ImageUploadButton({
           onChange={(event) => {
             const file = event.target.files?.[0];
             event.target.value = "";
-            if (!file) return;
-            setStatus({ kind: "uploading" });
-            void uploadImage(file, purpose)
-              .then(() => {
-                setStatus({ kind: "idle" });
-                onUploaded();
-              })
-              .catch((error: unknown) => {
-                setStatus({
-                  kind: "error",
-                  message: error instanceof Error ? error.message : "Upload failed.",
-                });
-              });
+            setPickedFile(file ?? null);
+            setAltText("");
           }}
         />
         <Button
@@ -78,8 +71,45 @@ function ImageUploadButton({
             inputRef.current?.click();
           }}
         >
-          {status.kind === "uploading" ? "Uploading..." : label}
+          {pickedFile ? pickedFile.name : label}
         </Button>
+        {pickedFile ? (
+          <>
+            <input
+              type="text"
+              placeholder="Describe this image for screen readers (optional)"
+              value={altText}
+              maxLength={300}
+              className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground"
+              onChange={(event) => {
+                setAltText(event.target.value);
+              }}
+            />
+            <Button
+              type="button"
+              size="sm"
+              disabled={status.kind === "uploading"}
+              onClick={() => {
+                setStatus({ kind: "uploading" });
+                void uploadImage(pickedFile, purpose, { altText: altText || undefined })
+                  .then(() => {
+                    setStatus({ kind: "idle" });
+                    setPickedFile(null);
+                    setAltText("");
+                    onUploaded();
+                  })
+                  .catch((error: unknown) => {
+                    setStatus({
+                      kind: "error",
+                      message: error instanceof Error ? error.message : "Upload failed.",
+                    });
+                  });
+              }}
+            >
+              {status.kind === "uploading" ? "Uploading..." : "Upload"}
+            </Button>
+          </>
+        ) : null}
         {status.kind === "error" ? (
           <p className="text-xs text-destructive">{status.message}</p>
         ) : null}
@@ -136,6 +166,7 @@ function ProfileSettings() {
             label="Change avatar"
             purpose="avatar"
             currentKey={profile?.avatarKey ?? null}
+            currentAltText={profile?.avatarAltText ?? null}
             onUploaded={() => {
               void router.invalidate();
             }}
@@ -144,6 +175,7 @@ function ProfileSettings() {
             label="Change cover photo"
             purpose="cover"
             currentKey={profile?.coverKey ?? null}
+            currentAltText={profile?.coverAltText ?? null}
             onUploaded={() => {
               void router.invalidate();
             }}

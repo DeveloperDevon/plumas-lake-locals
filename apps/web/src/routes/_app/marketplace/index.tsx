@@ -175,6 +175,7 @@ function Marketplace() {
           Free
         </Button>
         <select
+          aria-label="Kind"
           className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground"
           value={search.kind ?? ""}
           onChange={(event) => {
@@ -186,6 +187,7 @@ function Marketplace() {
           <option value="service">Services</option>
         </select>
         <select
+          aria-label="Type"
           className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground"
           value={search.type ?? ""}
           onChange={(event) => {
@@ -198,6 +200,7 @@ function Marketplace() {
           <option value="wanted">Wanted</option>
         </select>
         <select
+          aria-label="Category"
           className="h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground"
           value={search.category ?? ""}
           onChange={(event) => {

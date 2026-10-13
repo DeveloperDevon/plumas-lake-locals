@@ -33,6 +33,7 @@ export interface PostMediaItem {
   r2Key: string;
   width: number;
   height: number;
+  altText: string | null;
 }
 
 export type ReactionCounts = Record<ReactionType, number>;
@@ -78,7 +79,13 @@ async function attachMedia(
   for (const row of mediaRows) {
     if (!row.postId) continue;
     const list = map.get(row.postId) ?? [];
-    list.push({ id: row.id, r2Key: row.r2Key, width: row.width ?? 0, height: row.height ?? 0 });
+    list.push({
+      id: row.id,
+      r2Key: row.r2Key,
+      width: row.width ?? 0,
+      height: row.height ?? 0,
+      altText: row.altText,
+    });
     map.set(row.postId, list);
   }
   return map;

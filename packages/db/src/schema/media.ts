@@ -14,6 +14,8 @@ export const media = pgTable("media", {
   width: integer("width"),
   height: integer("height"),
   albumId: uuid("album_id"),
+  // NFR-09: screen-reader description, prompted for (optionally) at upload time.
+  altText: text("alt_text"),
   // FR-MKT-01: a listing's photos - cascades, since listings (task #28) are hard-deleted like
   // events, not soft-deleted like posts; without cascade, deleting a listing with photos would
   // fail on this FK.

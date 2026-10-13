@@ -1,3 +1,4 @@
+import { createBusiness, createEvent, createGroup, createListing } from "@plumas/auth";
 import { createDb, schema } from "@plumas/db";
 
 function mustGetEnv(name: string): string {
@@ -30,4 +31,50 @@ export async function seedMember(role: "member" | "admin" = "member") {
     .returning();
   if (!user) throw new Error("Failed to seed a member");
   return user;
+}
+
+/**
+ * Detail-page content for the accessibility scan (and anything else that just needs a real
+ * group/business/event/listing to visit) - created directly via @plumas/auth's own service
+ * functions, same reasoning as seedMember: no React Email template is involved, so there's no
+ * JSX-in-the-test-process conflict to avoid here.
+ */
+export async function seedGroup(ownerId: string) {
+  const db = testDb();
+  return createGroup(db, {
+    ownerId,
+    name: `E2E Group ${crypto.randomUUID()}`,
+    visibility: "public",
+  });
+}
+
+export async function seedBusiness(ownerId: string) {
+  const db = testDb();
+  return createBusiness(db, {
+    ownerId,
+    name: `E2E Business ${crypto.randomUUID()}`,
+    serviceArea: "Plumas Lake",
+  });
+}
+
+export async function seedEvent(createdBy: string) {
+  const db = testDb();
+  return createEvent(db, {
+    createdBy,
+    title: `E2E Event ${crypto.randomUUID()}`,
+    startsAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+    allDay: false,
+  });
+}
+
+export async function seedListing(sellerId: string) {
+  const db = testDb();
+  return createListing(db, {
+    sellerId,
+    kind: "item",
+    type: "sale",
+    title: `E2E Listing ${crypto.randomUUID()}`,
+    category: "furniture",
+    priceCents: 1000,
+  });
 }

@@ -105,6 +105,7 @@ export interface EventView {
   allDay: boolean;
   location: string | null;
   coverKey: string | null;
+  coverAltText: string | null;
   createdAt: Date;
   createdBy: string;
   creatorDisplayName: string;
@@ -151,6 +152,7 @@ export async function getEventById(
       allDay: events.allDay,
       location: events.location,
       coverKey: events.coverKey,
+      coverAltText: events.coverAltText,
       createdAt: events.createdAt,
       createdBy: events.createdBy,
       hostType: events.hostType,

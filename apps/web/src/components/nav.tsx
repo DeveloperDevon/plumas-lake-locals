@@ -62,8 +62,14 @@ export function NavRail({
         <Link
           key={item.to}
           to={item.to}
-          className="flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
-          activeProps={{ className: "bg-muted text-foreground" }}
+          // Both the hover and active colors are expressed as data-[status=active]/hover:
+          // variants on one static className, rather than via activeProps - two separately
+          // concatenated class strings compete on equal specificity, so which one visually
+          // wins depends on Tailwind's generated stylesheet order, not JSX order. That silently
+          // broke the active-link text color (it kept losing to the base text-muted-foreground)
+          // and failed axe-core's color-contrast check - a compound data-attribute selector
+          // doesn't have that ambiguity.
+          className="flex min-h-11 items-center gap-3 rounded-md px-3 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground data-[status=active]:bg-muted data-[status=active]:text-foreground"
         >
           <item.icon className="h-5 w-5" />
           {item.label}
@@ -92,8 +98,7 @@ export function TabBar({
         <Link
           key={item.to}
           to={item.to}
-          className="relative flex min-h-11 flex-1 flex-col items-center justify-center gap-1 py-2 text-xs font-medium text-muted-foreground"
-          activeProps={{ className: "text-foreground" }}
+          className="relative flex min-h-11 flex-1 flex-col items-center justify-center gap-1 py-2 text-xs font-medium text-muted-foreground data-[status=active]:text-foreground"
         >
           <item.icon className="h-5 w-5" />
           {item.label}

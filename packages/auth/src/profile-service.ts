@@ -38,7 +38,9 @@ export interface ProfileView {
   id: string;
   displayName: string;
   avatarKey: string | null;
+  avatarAltText: string | null;
   coverKey: string | null;
+  coverAltText: string | null;
   bio: string | null;
   street: string | null;
   interests: string[] | null;
@@ -84,7 +86,9 @@ export async function getProfile(
     id: user.id,
     displayName: user.displayName,
     avatarKey: user.avatarKey,
+    avatarAltText: user.avatarAltText,
     coverKey: user.coverKey,
+    coverAltText: user.coverAltText,
     bio: user.bio,
     street: user.street,
     interests: visible("interests") ? user.interests : null,

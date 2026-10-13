@@ -128,6 +128,7 @@ export interface GroupView {
   description: string | null;
   category: string | null;
   coverKey: string | null;
+  coverAltText: string | null;
   ownerId: string;
   visibility: GroupVisibility;
   createdAt: Date;
@@ -180,6 +181,7 @@ export async function getGroupBySlug(
     description: row.description,
     category: row.category,
     coverKey: row.coverKey,
+    coverAltText: row.coverAltText,
     ownerId: row.ownerId,
     visibility: row.visibility,
     createdAt: row.createdAt,

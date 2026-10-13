@@ -127,7 +127,7 @@ function ListingDetail() {
             <div className="flex flex-col gap-2">
               <img
                 src={mediaUrl(listing.photos[0]?.r2Key ?? "", "medium")}
-                alt=""
+                alt={listing.photos[0]?.altText ?? ""}
                 className="h-56 w-full rounded-md object-cover"
               />
               {listing.photos.length > 1 ? (
@@ -136,7 +136,7 @@ function ListingDetail() {
                     <img
                       key={photo.id}
                       src={mediaUrl(photo.r2Key, "thumbnail")}
-                      alt=""
+                      alt={photo.altText ?? ""}
                       className="h-16 w-16 shrink-0 rounded-md object-cover"
                     />
                   ))}
@@ -361,6 +361,7 @@ function EditListingPanel({
           }}
         />
         <select
+          aria-label="Category"
           value={category}
           className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground"
           onChange={(e) => {
@@ -400,6 +401,7 @@ function EditListingPanel({
             />
             {kind === "service" ? (
               <select
+                aria-label="Price model"
                 value={priceUnit}
                 className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground"
                 onChange={(e) => {
