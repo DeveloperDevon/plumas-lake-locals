@@ -1,6 +1,11 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
+import { useServerFn } from "@tanstack/react-start";
+import { useEffect, useState } from "react";
 
 import { NavRail, TabBar } from "../components/nav";
+import { getUnreadNotificationCountFn } from "../server/functions/notifications";
+
+const UNREAD_POLL_MS = 30_000;
 
 export const Route = createFileRoute("/_app")({
   beforeLoad: ({ context }) => {
@@ -18,19 +23,37 @@ export const Route = createFileRoute("/_app")({
     }
     return { user: context.session.user };
   },
+  loader: async () => ({ unreadCount: await getUnreadNotificationCountFn() }),
   component: AppShell,
 });
 
 function AppShell() {
   const { user } = Route.useRouteContext();
+  const { unreadCount: initialUnreadCount } = Route.useLoaderData();
   const isAdmin = user.role === "admin";
+
+  // No push/websocket exists yet (FR-NOT-03 push is deferred) - polling is the simplest way to
+  // keep the nav badge roughly live.
+  const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
+  const getUnreadCount = useServerFn(getUnreadNotificationCountFn);
+  useEffect(() => {
+    const interval = setInterval(() => {
+      getUnreadCount()
+        .then(setUnreadCount)
+        .catch(() => undefined);
+    }, UNREAD_POLL_MS);
+    return () => {
+      clearInterval(interval);
+    };
+  }, [getUnreadCount]);
+
   return (
     <div className="flex min-h-screen">
-      <NavRail userId={user.id} isAdmin={isAdmin} />
+      <NavRail userId={user.id} isAdmin={isAdmin} unreadCount={unreadCount} />
       <div className="min-w-0 flex-1 pb-16 lg:pb-0">
         <Outlet />
       </div>
-      <TabBar userId={user.id} isAdmin={isAdmin} />
+      <TabBar userId={user.id} isAdmin={isAdmin} unreadCount={unreadCount} />
     </div>
   );
 }

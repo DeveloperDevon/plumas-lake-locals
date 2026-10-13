@@ -8,6 +8,7 @@ export * from "./group";
 export * from "./invite";
 export * from "./media";
 export * from "./moderation";
+export * from "./notification";
 export * from "./post";
 export * from "./reaction";
 export * from "./relationship";

@@ -1,7 +1,9 @@
 import { type Database, schema } from "@plumas/db";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
-const { comments, users } = schema;
+import { createNotification } from "./notification-service";
+
+const { comments, posts, users } = schema;
 
 export class CommentNotFoundError extends Error {
   constructor(message = "That comment no longer exists.") {
@@ -90,6 +92,7 @@ export interface CreateCommentInput {
 }
 
 export async function createComment(database: Database, input: CreateCommentInput) {
+  let parentAuthorId: string | null = null;
   if (input.parentId) {
     const [parent] = await database.select().from(comments).where(eq(comments.id, input.parentId));
     if (parent?.targetType !== "post" || parent.targetId !== input.postId || parent.deletedAt) {
@@ -97,6 +100,7 @@ export async function createComment(database: Database, input: CreateCommentInpu
     }
     // One level of replies (FR-FEED-03): a reply's parent must itself be top-level.
     if (parent.parentId) throw new CommentReplyDepthError();
+    parentAuthorId = parent.userId;
   }
 
   const [row] = await database
@@ -110,7 +114,80 @@ export async function createComment(database: Database, input: CreateCommentInpu
     })
     .returning();
   if (!row) throw new Error("Failed to create comment");
+
+  const [post] = await database
+    .select({ authorId: posts.authorId })
+    .from(posts)
+    .where(eq(posts.id, input.postId));
+
+  await notifyAboutComment(database, {
+    targetType: "post",
+    targetId: input.postId,
+    ownerId: post?.authorId ?? null,
+    commenterId: input.userId,
+    parentAuthorId,
+    body: input.body,
+  });
+
   return row;
+}
+
+/**
+ * FR-NOT-01: notifies the post/event owner ("comment_on_post"/"comment_on_event") and, for a
+ * reply, separately the parent comment's author ("reply_to_comment") - skipping whichever
+ * recipient is the commenter themselves. Shared by createComment and event-service.ts's
+ * createEventComment, both resolving their own owner id (posts and events are different
+ * tables) and calling into this for the shared notify shape.
+ */
+export async function notifyAboutComment(
+  database: Database,
+  input: {
+    targetType: "post" | "event";
+    targetId: string;
+    ownerId: string | null;
+    commenterId: string;
+    parentAuthorId: string | null;
+    body: string;
+  },
+): Promise<void> {
+  const [commenter] = await database
+    .select({ displayName: users.displayName })
+    .from(users)
+    .where(eq(users.id, input.commenterId));
+  const actorName = commenter?.displayName ?? "A member";
+  const excerpt = input.body.length > 140 ? `${input.body.slice(0, 140)}…` : input.body;
+  const ownerId = input.ownerId;
+
+  if (ownerId && ownerId !== input.commenterId) {
+    await createNotification(database, {
+      userId: ownerId,
+      type: input.targetType === "post" ? "comment_on_post" : "comment_on_event",
+      payload: {
+        actorId: input.commenterId,
+        actorName,
+        targetType: input.targetType,
+        targetId: input.targetId,
+        excerpt,
+      },
+    });
+  }
+  if (
+    input.parentAuthorId &&
+    input.parentAuthorId !== input.commenterId &&
+    input.parentAuthorId !== ownerId
+  ) {
+    await createNotification(database, {
+      userId: input.parentAuthorId,
+      type: "reply_to_comment",
+      payload: {
+        actorId: input.commenterId,
+        actorName,
+        targetType: input.targetType,
+        targetId: input.targetId,
+        excerpt,
+      },
+    });
+  }
 }
 
 export interface UpdateCommentInput {

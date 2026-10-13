@@ -4,6 +4,8 @@ import { DEFAULT_MEMBER_INVITE_QUOTA, INVITE_EXPIRY_DAYS } from "@plumas/validat
 import { hashPassword } from "better-auth/crypto";
 import { and, count, desc, eq, isNull } from "drizzle-orm";
 
+import { createNotification } from "./notification-service";
+
 const { accounts, invites, users } = schema;
 
 export class InviteQuotaExceededError extends Error {
@@ -202,6 +204,12 @@ export async function acceptInvite(
   });
 
   await database.update(invites).set({ acceptedAt: new Date() }).where(eq(invites.id, invite.id));
+
+  await createNotification(database, {
+    userId: invite.inviterId,
+    type: "invite_accepted",
+    payload: { newUserId: user.id, newUserName: user.displayName },
+  });
 
   return user;
 }

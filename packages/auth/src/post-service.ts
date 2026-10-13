@@ -4,6 +4,7 @@ import { reactionTypes } from "@plumas/validators";
 import { and, count, desc, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
 
 import { countCommentsForPosts } from "./comment-service";
+import { createNotification } from "./notification-service";
 
 const { media, posts, reactions, users } = schema;
 
@@ -450,6 +451,23 @@ export async function setPostReaction(
       target: [reactions.targetType, reactions.targetId, reactions.userId],
       set: { type },
     });
+
+  if (existingPost.authorId !== userId) {
+    const [actor] = await database
+      .select({ displayName: users.displayName })
+      .from(users)
+      .where(eq(users.id, userId));
+    await createNotification(database, {
+      userId: existingPost.authorId,
+      type: "reaction_on_post",
+      payload: {
+        actorId: userId,
+        actorName: actor?.displayName ?? "A member",
+        targetId: postId,
+        reactionType: type,
+      },
+    });
+  }
 }
 
 export async function removePostReaction(database: Database, postId: string, userId: string) {

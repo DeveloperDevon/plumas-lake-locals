@@ -8,6 +8,7 @@ import {
   CommentForbiddenError,
   CommentNotFoundError,
   CommentReplyDepthError,
+  notifyAboutComment,
 } from "./comment-service";
 import { GroupForbiddenError, requireActiveGroupMember } from "./group-service";
 import { writeAuditLog } from "./moderation-service";
@@ -393,12 +394,14 @@ export interface CreateEventCommentInput {
 }
 
 export async function createEventComment(database: Database, input: CreateEventCommentInput) {
+  let parentAuthorId: string | null = null;
   if (input.parentId) {
     const [parent] = await database.select().from(comments).where(eq(comments.id, input.parentId));
     if (parent?.targetType !== "event" || parent.targetId !== input.eventId || parent.deletedAt) {
       throw new CommentNotFoundError("The comment you're replying to no longer exists.");
     }
     if (parent.parentId) throw new CommentReplyDepthError();
+    parentAuthorId = parent.userId;
   }
 
   const [row] = await database
@@ -412,6 +415,23 @@ export async function createEventComment(database: Database, input: CreateEventC
     })
     .returning();
   if (!row) throw new Error("Failed to create comment");
+
+  const [event] = await database
+    .select({ createdBy: events.createdBy })
+    .from(events)
+    .where(eq(events.id, input.eventId));
+
+  // FR-CAL-10/FR-NOT-01: the "creator notified" clause this comment component deferred in
+  // task #26 (no Notifications system existed yet) is now live.
+  await notifyAboutComment(database, {
+    targetType: "event",
+    targetId: input.eventId,
+    ownerId: event?.createdBy ?? null,
+    commenterId: input.userId,
+    parentAuthorId,
+    body: input.body,
+  });
+
   return row;
 }
 

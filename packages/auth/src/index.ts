@@ -7,6 +7,7 @@ export * from "./group-service";
 export * from "./invite-service";
 export * from "./media-service";
 export * from "./moderation-service";
+export * from "./notification-service";
 export * from "./password-service";
 export * from "./post-service";
 export * from "./profile-service";

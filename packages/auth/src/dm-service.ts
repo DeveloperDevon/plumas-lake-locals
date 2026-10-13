@@ -2,6 +2,8 @@ import { type Database, schema } from "@plumas/db";
 import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
+import { createNotification } from "./notification-service";
+
 const {
   conversationParticipants,
   conversations,
@@ -324,7 +326,11 @@ export interface AddGroupMemberInput {
  * `recordDeviceLinkOperations`.
  */
 export async function addGroupMember(database: Database, input: AddGroupMemberInput) {
-  await requireGroupCreator(database, input.conversationId, input.actingUserId);
+  const conversation = await requireGroupCreator(
+    database,
+    input.conversationId,
+    input.actingUserId,
+  );
   if (input.newUserId === input.actingUserId) throw new DmSelfConversationError();
 
   const [countRow] = await database
@@ -367,6 +373,21 @@ export async function addGroupMember(database: Database, input: AddGroupMemberIn
     .update(conversations)
     .set({ epoch: input.epoch, lastMessageAt: new Date() })
     .where(eq(conversations.id, input.conversationId));
+
+  const [actor] = await database
+    .select({ displayName: users.displayName })
+    .from(users)
+    .where(eq(users.id, input.actingUserId));
+  await createNotification(database, {
+    userId: input.newUserId,
+    type: "dm_added_to_group",
+    payload: {
+      actorId: input.actingUserId,
+      actorName: actor?.displayName ?? "A member",
+      conversationId: input.conversationId,
+      groupName: conversation.name ?? "a group chat",
+    },
+  });
 }
 
 export interface RemoveGroupMemberInput {
@@ -539,7 +560,48 @@ export async function sendMessage(database: Database, input: SendMessageInput) {
     .set({ lastMessageAt: new Date() })
     .where(eq(conversations.id, input.conversationId));
 
+  await notifyOtherParticipants(database, input.conversationId, input.senderUserId, "dm_message");
+
   return row;
+}
+
+/**
+ * FR-NOT-01: one notification per other active participant - messages are E2EE (sendMessage
+ * stores ciphertext only), so this can say who sent something, never what - no content preview
+ * is available server-side.
+ */
+async function notifyOtherParticipants(
+  database: Database,
+  conversationId: string,
+  senderUserId: string,
+  type: "dm_message",
+) {
+  const [sender] = await database
+    .select({ displayName: users.displayName })
+    .from(users)
+    .where(eq(users.id, senderUserId));
+  const others = await database
+    .select({ userId: conversationParticipants.userId })
+    .from(conversationParticipants)
+    .where(
+      and(
+        eq(conversationParticipants.conversationId, conversationId),
+        eq(conversationParticipants.status, "active"),
+      ),
+    );
+
+  for (const other of others) {
+    if (other.userId === senderUserId) continue;
+    await createNotification(database, {
+      userId: other.userId,
+      type,
+      payload: {
+        actorId: senderUserId,
+        actorName: sender?.displayName ?? "A member",
+        conversationId,
+      },
+    });
+  }
 }
 
 /** FR-DM-02: inbox, most recently active conversation first. */

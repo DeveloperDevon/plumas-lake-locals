@@ -3,6 +3,7 @@ import type { GroupMemberRole, GroupVisibility } from "@plumas/validators";
 import { and, count, desc, eq, ilike, lt, notInArray } from "drizzle-orm";
 
 import { writeAuditLog } from "./moderation-service";
+import { createNotification } from "./notification-service";
 
 const { groupMembers, groups, users } = schema;
 
@@ -330,10 +331,31 @@ export async function declineJoinRequest(
   targetUserId: string,
   actingUserId: string,
 ) {
-  if (actingUserId !== targetUserId) await requireGroupAdmin(database, groupId, actingUserId);
+  const byAdmin = actingUserId !== targetUserId;
+  if (byAdmin) await requireGroupAdmin(database, groupId, actingUserId);
   await database
     .delete(groupMembers)
     .where(and(eq(groupMembers.groupId, groupId), eq(groupMembers.userId, targetUserId)));
+
+  // Only when an admin declines someone else's request - not when the requester cancels their own.
+  if (byAdmin) await notifyJoinDecision(database, groupId, targetUserId, "group_join_declined");
+}
+
+async function notifyJoinDecision(
+  database: Database,
+  groupId: string,
+  targetUserId: string,
+  type: "group_join_approved" | "group_join_declined",
+) {
+  const [group] = await database
+    .select({ name: groups.name, slug: groups.slug })
+    .from(groups)
+    .where(eq(groups.id, groupId));
+  await createNotification(database, {
+    userId: targetUserId,
+    type,
+    payload: { groupId, groupName: group?.name ?? "a group", groupSlug: group?.slug ?? null },
+  });
 }
 
 /** FR-GRP-04: owner/admin only. */
@@ -356,6 +378,7 @@ export async function approveJoinRequest(
     )
     .returning();
   if (!row) throw new GroupNotFoundError("That join request no longer exists.");
+  await notifyJoinDecision(database, groupId, targetUserId, "group_join_approved");
   return row;
 }
 

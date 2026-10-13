@@ -3,6 +3,8 @@ import type { RelationshipType } from "@plumas/validators";
 import { inverseRelationshipType, relationshipLabel } from "@plumas/validators";
 import { and, eq, inArray, or } from "drizzle-orm";
 
+import { createNotification } from "./notification-service";
+
 const { relationships, users } = schema;
 
 export class RelationshipNotFoundError extends Error {
@@ -57,6 +59,21 @@ export async function requestRelationship(database: Database, input: RequestRela
     .values({ fromUser: input.fromUserId, toUser: input.toUserId, type: input.type })
     .returning();
   if (!row) throw new Error("Failed to create relationship request");
+
+  const [actor] = await database
+    .select({ displayName: users.displayName })
+    .from(users)
+    .where(eq(users.id, input.fromUserId));
+  await createNotification(database, {
+    userId: input.toUserId,
+    type: "relationship_request",
+    payload: {
+      actorId: input.fromUserId,
+      actorName: actor?.displayName ?? "A member",
+      relationshipType: input.type,
+    },
+  });
+
   return row;
 }
 
