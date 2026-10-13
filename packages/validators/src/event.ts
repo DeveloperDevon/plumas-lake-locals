@@ -13,6 +13,16 @@ export const eventTitleSchema = z.string().trim().min(1).max(150);
 export const eventDescriptionSchema = z.string().trim().max(2000);
 export const eventLocationSchema = z.string().trim().max(200);
 
+/** FR-CAL-05: weekly/monthly only, matching the PRD's exact wording - no custom RRULE input. */
+export const eventRecurrenceValues = ["none", "weekly", "monthly"] as const;
+export type EventRecurrence = (typeof eventRecurrenceValues)[number];
+export const eventRecurrenceSchema = z.enum(eventRecurrenceValues);
+
+/** FR-CAL-04. */
+export const rsvpStatuses = ["going", "interested"] as const;
+export type RsvpStatus = (typeof rsvpStatuses)[number];
+export const rsvpStatusSchema = z.enum(rsvpStatuses);
+
 const eventHostFields = z.object({
   hostType: eventHostTypeSchema.optional(),
   hostId: uuidSchema.optional(),
@@ -38,6 +48,7 @@ export const createEventSchema = z
     endsAt: z.string().datetime().optional(),
     allDay: z.boolean().default(false),
     location: eventLocationSchema.optional(),
+    recurrence: eventRecurrenceSchema.optional(),
   })
   .merge(eventHostFields)
   .superRefine(refineHostPair);
@@ -51,6 +62,7 @@ export const updateEventSchema = z.object({
   endsAt: z.string().datetime().optional(),
   allDay: z.boolean().default(false),
   location: eventLocationSchema.optional(),
+  recurrence: eventRecurrenceSchema.optional(),
 });
 export type UpdateEventInput = z.infer<typeof updateEventSchema>;
 
@@ -74,3 +86,9 @@ export const setEventReactionSchema = z.object({
   type: reactionTypeSchema,
 });
 export type SetEventReactionInput = z.infer<typeof setEventReactionSchema>;
+
+export const setEventRsvpSchema = z.object({
+  eventId: uuidSchema,
+  status: rsvpStatusSchema,
+});
+export type SetEventRsvpInput = z.infer<typeof setEventRsvpSchema>;

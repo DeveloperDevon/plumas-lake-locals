@@ -24,7 +24,9 @@ export type NotificationType =
   | "comment_on_event"
   | "comment_on_listing"
   | "dm_message"
-  | "dm_added_to_group";
+  | "dm_added_to_group"
+  | "event_updated"
+  | "event_cancelled";
 
 export interface CreateNotificationInput {
   userId: string;
@@ -126,6 +128,17 @@ function notificationEmailContent(
         body: title,
         path: conversationId ? `/messages/${conversationId}` : "/messages",
       };
+    }
+    case "event_updated": {
+      const eventTitle = str(payload, "eventTitle") ?? "an event";
+      const title = `"${eventTitle}" was updated`;
+      return { title, body: title, path: targetPath() };
+    }
+    case "event_cancelled": {
+      const eventTitle = str(payload, "eventTitle") ?? "an event";
+      const title = `"${eventTitle}" was cancelled`;
+      // Not targetPath() - by the time this email sends, the event row is already gone.
+      return { title, body: title, path: "/calendar" };
     }
   }
 }

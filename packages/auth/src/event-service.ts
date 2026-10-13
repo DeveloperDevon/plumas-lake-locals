@@ -1,7 +1,13 @@
-import { type Database, schema } from "@plumas/db";
-import type { EventHostType, ReactionType } from "@plumas/validators";
+import {
+  type Database,
+  generateCalendarFeedToken,
+  hashCalendarFeedToken,
+  schema,
+} from "@plumas/db";
+import type { EventHostType, EventRecurrence, ReactionType, RsvpStatus } from "@plumas/validators";
 import { reactionTypes } from "@plumas/validators";
-import { and, asc, eq, gte, inArray, lte } from "drizzle-orm";
+import { and, asc, eq, gte, inArray, isNotNull, lte, ne, or } from "drizzle-orm";
+import { RRule } from "rrule";
 
 import { requireManager } from "./business-service";
 import {
@@ -12,8 +18,21 @@ import {
 } from "./comment-service";
 import { GroupForbiddenError, requireActiveGroupMember } from "./group-service";
 import { writeAuditLog } from "./moderation-service";
+import { createNotification } from "./notification-service";
 
-const { businesses, comments, events, groupMembers, groups, reactions, users } = schema;
+const { businesses, comments, events, eventRsvps, groupMembers, groups, reactions, users } = schema;
+
+/** FR-CAL-05: weekly/monthly only - the literal RRULE text stored in events.rrule. */
+function recurrenceToRrule(recurrence: EventRecurrence | undefined): string | null {
+  if (!recurrence || recurrence === "none") return null;
+  return recurrence === "weekly" ? "FREQ=WEEKLY" : "FREQ=MONTHLY";
+}
+
+function rruleToRecurrence(rrule: string | null): EventRecurrence {
+  if (rrule === "FREQ=WEEKLY") return "weekly";
+  if (rrule === "FREQ=MONTHLY") return "monthly";
+  return "none";
+}
 
 export class EventNotFoundError extends Error {
   constructor(message = "That event no longer exists.") {
@@ -68,6 +87,7 @@ export interface CreateEventInput {
   location?: string | undefined;
   hostType?: EventHostType | undefined;
   hostId?: string | undefined;
+  recurrence?: EventRecurrence | undefined;
 }
 
 /** FR-CAL-01/02: hosting under a group/business requires the same posting permission each already enforces for its own board. */
@@ -90,6 +110,7 @@ export async function createEvent(database: Database, input: CreateEventInput) {
       location: input.location ?? null,
       hostType: input.hostType ?? null,
       hostId: input.hostId ?? null,
+      rrule: recurrenceToRrule(input.recurrence),
     })
     .returning();
   if (!row) throw new Error("Failed to create event");
@@ -114,6 +135,10 @@ export interface EventView {
   hostId: string | null;
   hostName: string | null;
   hostSlug: string | null;
+  // FR-CAL-05: the parsed form of events.rrule, for UI; rrule itself (the raw ICS text, or
+  // null) is what ics.ts needs for export/feed generation.
+  recurrence: EventRecurrence;
+  rrule: string | null;
 }
 
 async function resolveHost(
@@ -157,6 +182,7 @@ export async function getEventById(
       createdBy: events.createdBy,
       hostType: events.hostType,
       hostId: events.hostId,
+      rrule: events.rrule,
       creatorDisplayName: users.displayName,
       creatorAvatarKey: users.avatarKey,
     })
@@ -175,7 +201,7 @@ export async function getEventById(
   }
 
   const { hostName, hostSlug } = await resolveHost(database, row.hostType, row.hostId);
-  return { ...row, hostName, hostSlug };
+  return { ...row, hostName, hostSlug, recurrence: rruleToRecurrence(row.rrule) };
 }
 
 export interface EventSummary {
@@ -189,56 +215,34 @@ export interface EventSummary {
   hostType: EventHostType | null;
   hostId: string | null;
   hostName: string | null;
+  recurrence: EventRecurrence;
 }
 
-/** FR-CAL-03: feeds the agenda/week/month views - one range query, then a batched visibility filter (never N+1). */
-export async function listEventsInRange(
-  database: Database,
-  { start, end, viewerId }: { start: Date; end: Date; viewerId: string },
-): Promise<EventSummary[]> {
-  const rows = await database
-    .select()
-    .from(events)
-    .where(and(gte(events.startsAt, start), lte(events.startsAt, end)))
-    .orderBy(asc(events.startsAt));
+type EventRow = typeof events.$inferSelect;
 
+/** Shared by listEventsInRange and listAllVisibleEventsForFeed - FR-CAL-11's private-group check, batched (never N+1). Also hands back groupById so callers that already need group names (for hostName) don't run a second query. */
+async function filterVisibleEventRows<T extends Pick<EventRow, "hostType" | "hostId">>(
+  database: Database,
+  rows: T[],
+  viewerId: string,
+) {
   const groupHostIds = [
     ...new Set(
       rows
         .filter(
-          (row): row is typeof row & { hostId: string } =>
-            row.hostType === "group" && Boolean(row.hostId),
+          (row): row is T & { hostId: string } => row.hostType === "group" && Boolean(row.hostId),
         )
         .map((row) => row.hostId),
     ),
   ];
-  const businessHostIds = [
-    ...new Set(
-      rows
-        .filter(
-          (row): row is typeof row & { hostId: string } =>
-            row.hostType === "business" && Boolean(row.hostId),
-        )
-        .map((row) => row.hostId),
-    ),
-  ];
-
-  const [groupRows, businessRows] = await Promise.all([
+  const groupRows =
     groupHostIds.length > 0
-      ? database
+      ? await database
           .select({ id: groups.id, name: groups.name, visibility: groups.visibility })
           .from(groups)
           .where(inArray(groups.id, groupHostIds))
-      : Promise.resolve([]),
-    businessHostIds.length > 0
-      ? database
-          .select({ id: businesses.id, name: businesses.name })
-          .from(businesses)
-          .where(inArray(businesses.id, businessHostIds))
-      : Promise.resolve([]),
-  ]);
+      : [];
   const groupById = new Map(groupRows.map((group) => [group.id, group]));
-  const businessById = new Map(businessRows.map((business) => [business.id, business]));
 
   const privateGroupIds = groupRows
     .filter((group) => group.visibility === "private")
@@ -265,23 +269,190 @@ export async function listEventsInRange(
     return visiblePrivateGroupIds.has(row.hostId);
   });
 
+  return { visible, groupById };
+}
+
+async function resolveHostNames(
+  database: Database,
+  rows: readonly Pick<EventRow, "hostType" | "hostId">[],
+  groupById: Map<string, { name: string }>,
+) {
+  const businessHostIds = [
+    ...new Set(
+      rows
+        .filter(
+          (row): row is typeof row & { hostId: string } =>
+            row.hostType === "business" && Boolean(row.hostId),
+        )
+        .map((row) => row.hostId),
+    ),
+  ];
+  const businessRows =
+    businessHostIds.length > 0
+      ? await database
+          .select({ id: businesses.id, name: businesses.name })
+          .from(businesses)
+          .where(inArray(businesses.id, businessHostIds))
+      : [];
+  const businessById = new Map(businessRows.map((business) => [business.id, business]));
+
+  return (row: Pick<EventRow, "hostType" | "hostId">): string | null => {
+    if (row.hostType === "group") return groupById.get(row.hostId ?? "")?.name ?? null;
+    if (row.hostType === "business") return businessById.get(row.hostId ?? "")?.name ?? null;
+    return null;
+  };
+}
+
+/**
+ * FR-CAL-05: expands a recurring row's rrule into its occurrences inside [start, end). Uses the
+ * `rrule` package's own UTC-based calendar math on the stored (UTC) startsAt as the anchor - a
+ * known, accepted simplification: a monthly-recurring event's Pacific wall-clock time can shift
+ * by an hour across a DST boundary, the same way a plain "add one month in UTC" would. Exact
+ * timezone-aware recurrence would need a TZID-aware RRULE evaluator; out of scope for a P1
+ * weekly/monthly-only feature.
+ */
+function expandOccurrences(
+  row: EventRow,
+  start: Date,
+  end: Date,
+): { startsAt: Date; endsAt: Date | null }[] {
+  if (!row.rrule) return [{ startsAt: row.startsAt, endsAt: row.endsAt }];
+  const rule = new RRule({
+    freq: row.rrule === "FREQ=WEEKLY" ? RRule.WEEKLY : RRule.MONTHLY,
+    dtstart: row.startsAt,
+  });
+  const durationMs = row.endsAt ? row.endsAt.getTime() - row.startsAt.getTime() : null;
+  return rule.between(start, end, true).map((occursAt) => ({
+    startsAt: occursAt,
+    endsAt: durationMs !== null ? new Date(occursAt.getTime() + durationMs) : null,
+  }));
+}
+
+/** FR-CAL-03: feeds the agenda/week/month views - one range query, then a batched visibility filter (never N+1), then recurring rows are expanded into their in-range occurrences. */
+export async function listEventsInRange(
+  database: Database,
+  { start, end, viewerId }: { start: Date; end: Date; viewerId: string },
+): Promise<EventSummary[]> {
+  // A recurring event's stored startsAt is only its first occurrence, which can be well outside
+  // the queried range even though later occurrences fall inside it - so recurring rows are
+  // fetched regardless of their own startsAt (bounded only by not having started after `end`).
+  const rows = await database
+    .select()
+    .from(events)
+    .where(
+      or(
+        and(gte(events.startsAt, start), lte(events.startsAt, end)),
+        and(isNotNull(events.rrule), lte(events.startsAt, end)),
+      ),
+    )
+    .orderBy(asc(events.startsAt));
+
+  const { visible, groupById } = await filterVisibleEventRows(database, rows, viewerId);
+  const hostNameFor = await resolveHostNames(database, visible, groupById);
+
+  const result: EventSummary[] = [];
+  for (const row of visible) {
+    const base = {
+      id: row.id,
+      title: row.title,
+      allDay: row.allDay,
+      location: row.location,
+      coverKey: row.coverKey,
+      hostType: row.hostType,
+      hostId: row.hostId,
+      hostName: hostNameFor(row),
+      recurrence: rruleToRecurrence(row.rrule),
+    };
+    for (const occurrence of expandOccurrences(row, start, end)) {
+      result.push({ ...base, ...occurrence });
+    }
+  }
+  result.sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
+  return result;
+}
+
+/**
+ * FR-CAL-06: the private ICS feed's event list. Unlike listEventsInRange, recurring rows are
+ * NOT expanded here - the feed emits each as its own RRULE master VEVENT and lets the
+ * subscribing calendar app expand occurrences itself (that's what RRULE-in-ICS is for).
+ * Bounded to recent/future/ongoing events so the feed doesn't grow unbounded: a one-off event
+ * drops out 90 days after it starts, but a recurring series stays in regardless of how long ago
+ * it began.
+ */
+export async function listAllVisibleEventsForFeed(
+  database: Database,
+  viewerId: string,
+): Promise<EventView[]> {
+  const ninetyDaysAgo = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+  const rows = await database
+    .select()
+    .from(events)
+    .where(or(gte(events.startsAt, ninetyDaysAgo), isNotNull(events.rrule)))
+    .orderBy(asc(events.startsAt));
+
+  const { visible, groupById } = await filterVisibleEventRows(database, rows, viewerId);
+  const hostNameFor = await resolveHostNames(database, visible, groupById);
+
+  const creatorIds = [...new Set(visible.map((row) => row.createdBy))];
+  const creatorRows =
+    creatorIds.length > 0
+      ? await database
+          .select({ id: users.id, displayName: users.displayName, avatarKey: users.avatarKey })
+          .from(users)
+          .where(inArray(users.id, creatorIds))
+      : [];
+  const creatorById = new Map(creatorRows.map((creator) => [creator.id, creator]));
+
   return visible.map((row) => ({
     id: row.id,
     title: row.title,
+    description: row.description,
     startsAt: row.startsAt,
     endsAt: row.endsAt,
     allDay: row.allDay,
     location: row.location,
     coverKey: row.coverKey,
+    coverAltText: row.coverAltText,
+    createdAt: row.createdAt,
+    createdBy: row.createdBy,
+    creatorDisplayName: creatorById.get(row.createdBy)?.displayName ?? "",
+    creatorAvatarKey: creatorById.get(row.createdBy)?.avatarKey ?? null,
     hostType: row.hostType,
     hostId: row.hostId,
-    hostName:
-      row.hostType === "group"
-        ? (groupById.get(row.hostId ?? "")?.name ?? null)
-        : row.hostType === "business"
-          ? (businessById.get(row.hostId ?? "")?.name ?? null)
-          : null,
+    hostName: hostNameFor(row),
+    hostSlug: null,
+    recurrence: rruleToRecurrence(row.rrule),
+    rrule: row.rrule,
   }));
+}
+
+/** FR-CAL-07: tells every RSVP'd member (except the actor themselves) that an event they're going to or interested in changed. Must run before any delete - event_rsvps cascades on events.id. */
+async function notifyRsvps(
+  database: Database,
+  eventId: string,
+  eventTitle: string,
+  actingUserId: string,
+  type: "event_updated" | "event_cancelled",
+) {
+  const rsvpRows = await database
+    .select({ userId: eventRsvps.userId })
+    .from(eventRsvps)
+    .where(and(eq(eventRsvps.eventId, eventId), ne(eventRsvps.userId, actingUserId)));
+  if (rsvpRows.length === 0) return;
+
+  const [actor] = await database
+    .select({ displayName: users.displayName })
+    .from(users)
+    .where(eq(users.id, actingUserId));
+  const payload = {
+    actorName: actor?.displayName ?? "Someone",
+    eventTitle,
+    targetId: eventId,
+    targetType: "event",
+  };
+  await Promise.all(
+    rsvpRows.map((rsvp) => createNotification(database, { userId: rsvp.userId, type, payload })),
+  );
 }
 
 export interface UpdateEventInput {
@@ -293,6 +464,7 @@ export interface UpdateEventInput {
   endsAt?: Date | undefined;
   allDay: boolean;
   location?: string | undefined;
+  recurrence?: EventRecurrence | undefined;
 }
 
 /** FR-CAL-07: creator-only. */
@@ -307,10 +479,12 @@ export async function updateEvent(database: Database, input: UpdateEventInput) {
       endsAt: input.endsAt ?? null,
       allDay: input.allDay,
       location: input.location ?? null,
+      rrule: recurrenceToRrule(input.recurrence),
     })
     .where(eq(events.id, input.eventId))
     .returning();
   if (!row) throw new EventNotFoundError();
+  await notifyRsvps(database, input.eventId, input.title, input.actingUserId, "event_updated");
   return row;
 }
 
@@ -331,6 +505,9 @@ export async function deleteEvent(database: Database, eventId: string, actingUse
     return;
   }
 
+  // FR-CAL-07: a creator-initiated cancel notifies RSVPs; an admin moderation delete above
+  // does not - that's content removal, not "the event you're going to changed".
+  await notifyRsvps(database, eventId, existing.title, actingUserId, "event_cancelled");
   await database.delete(events).where(eq(events.id, eventId));
 }
 
@@ -500,4 +677,87 @@ export async function removeEventReaction(database: Database, eventId: string, u
         eq(reactions.userId, userId),
       ),
     );
+}
+
+// ---- RSVPs (FR-CAL-04) - one per member per event (the series, not a per-occurrence RSVP). ----
+
+export interface RsvpCounts {
+  going: number;
+  interested: number;
+}
+
+export async function setEventRsvp(
+  database: Database,
+  eventId: string,
+  userId: string,
+  status: RsvpStatus,
+) {
+  const [existing] = await database.select().from(events).where(eq(events.id, eventId));
+  if (!existing) throw new EventNotFoundError();
+
+  await database
+    .insert(eventRsvps)
+    .values({ eventId, userId, status })
+    .onConflictDoUpdate({ target: [eventRsvps.eventId, eventRsvps.userId], set: { status } });
+}
+
+export async function removeEventRsvp(database: Database, eventId: string, userId: string) {
+  await database
+    .delete(eventRsvps)
+    .where(and(eq(eventRsvps.eventId, eventId), eq(eventRsvps.userId, userId)));
+}
+
+export async function getEventRsvps(
+  database: Database,
+  eventId: string,
+  viewerId: string,
+): Promise<{ counts: RsvpCounts; mine: RsvpStatus | null }> {
+  const rows = await database
+    .select({ userId: eventRsvps.userId, status: eventRsvps.status })
+    .from(eventRsvps)
+    .where(eq(eventRsvps.eventId, eventId));
+
+  const counts: RsvpCounts = { going: 0, interested: 0 };
+  let mine: RsvpStatus | null = null;
+  for (const row of rows) {
+    counts[row.status] += 1;
+    if (row.userId === viewerId) mine = row.status;
+  }
+  return { counts, mine };
+}
+
+// ---- Private ICS feed (FR-CAL-06) - only the token's hash is ever stored, same shape as
+// invites.token_hash. The raw token is shown once, at generation time. ----
+
+/** Always issues a fresh token, invalidating any previous one - same one-time-reveal UX as invite links. */
+export async function regenerateCalendarFeedToken(
+  database: Database,
+  userId: string,
+): Promise<string> {
+  const token = generateCalendarFeedToken();
+  await database
+    .update(users)
+    .set({ calendarFeedTokenHash: hashCalendarFeedToken(token) })
+    .where(eq(users.id, userId));
+  return token;
+}
+
+export async function hasCalendarFeedToken(database: Database, userId: string): Promise<boolean> {
+  const [row] = await database
+    .select({ calendarFeedTokenHash: users.calendarFeedTokenHash })
+    .from(users)
+    .where(eq(users.id, userId));
+  return Boolean(row?.calendarFeedTokenHash);
+}
+
+/** Looked up by hash, same as invite tokens - the raw token is never persisted. */
+export async function getUserIdForCalendarFeedToken(
+  database: Database,
+  token: string,
+): Promise<string | null> {
+  const [row] = await database
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.calendarFeedTokenHash, hashCalendarFeedToken(token)));
+  return row?.id ?? null;
 }

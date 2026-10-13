@@ -59,6 +59,10 @@ function describeNotification(row: NotificationRow): string {
       return `New message from ${actor}`;
     case "dm_added_to_group":
       return `${actor} added you to ${str(p, "groupName") ?? "a group chat"}`;
+    case "event_updated":
+      return `"${str(p, "eventTitle") ?? "An event"}" was updated`;
+    case "event_cancelled":
+      return `"${str(p, "eventTitle") ?? "An event"}" was cancelled`;
     default:
       return "New notification";
   }
@@ -116,6 +120,16 @@ function useGoToTarget() {
         }
         return;
       }
+      case "event_updated": {
+        const targetId = str(p, "targetId");
+        if (targetId) await navigate({ to: "/calendar/$eventId", params: { eventId: targetId } });
+        else await navigate({ to: "/calendar" });
+        return;
+      }
+      case "event_cancelled":
+        // The event row is already gone by the time this fires - there's no detail page left.
+        await navigate({ to: "/calendar" });
+        return;
       default:
         return;
     }

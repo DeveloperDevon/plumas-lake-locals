@@ -7,6 +7,7 @@ import {
   relationshipLabelGenderValues,
   relationshipStatuses,
   relationshipTypes,
+  rsvpStatuses,
   themes,
 } from "@plumas/validators";
 import { pgEnum } from "drizzle-orm/pg-core";
@@ -65,3 +66,6 @@ export const commentTargetTypeEnum = pgEnum("comment_target_type", ["post", "lis
 export const reactionTypeEnum = pgEnum("reaction_type", [...reactionTypes]);
 
 export const eventHostTypeEnum = pgEnum("event_host_type", ["group", "business"]);
+
+// Generated from @plumas/validators' canonical list, same reasoning as themeEnum above.
+export const rsvpStatusEnum = pgEnum("rsvp_status", [...rsvpStatuses]);

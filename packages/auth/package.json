@@ -18,6 +18,7 @@
     "@plumas/validators": "workspace:*",
     "better-auth": "^1.2.0",
     "drizzle-orm": "^0.36.0",
+    "rrule": "^2.8.1",
     "uuidv7": "^1.2.1"
   },
   "devDependencies": {

@@ -2,7 +2,7 @@ import type { EventSummary } from "@plumas/auth";
 import { Button } from "@plumas/ui";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Repeat } from "lucide-react";
 import { useState } from "react";
 
 import { formatEventTime, pacificWallClockToUtc } from "../../../lib/format-date";
@@ -106,7 +106,15 @@ function EventRow({ event }: { event: EventSummary }) {
     >
       <EventCoverIcon coverKey={event.coverKey} />
       <div className="min-w-0">
-        <p className="truncate text-sm font-medium">{event.title}</p>
+        <p className="flex items-center gap-1 truncate text-sm font-medium">
+          {event.title}
+          {event.recurrence !== "none" ? (
+            <Repeat
+              className="h-3 w-3 shrink-0 text-muted-foreground"
+              aria-label={event.recurrence === "weekly" ? "Repeats weekly" : "Repeats monthly"}
+            />
+          ) : null}
+        </p>
         <p className="text-xs text-muted-foreground">
           {event.allDay
             ? formatEventTime(event.startsAt, { timeStyle: undefined })

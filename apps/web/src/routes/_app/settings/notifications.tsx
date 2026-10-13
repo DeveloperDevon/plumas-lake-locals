@@ -28,6 +28,8 @@ const notificationLabels: Record<NotificationType, string> = {
   comment_on_listing: "Comments on your listings",
   dm_message: "New direct messages",
   dm_added_to_group: "Added to a group chat",
+  event_updated: "Changes to events you're attending",
+  event_cancelled: "Cancellations of events you're attending",
 };
 
 function NotificationSettings() {

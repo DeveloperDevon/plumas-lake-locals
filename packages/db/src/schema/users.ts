@@ -52,6 +52,9 @@ export const users = pgTable(
     // an explicit `false` for a type turns its email off. Validated by @plumas/validators, not
     // a DB constraint, same reasoning as fieldVisibility right above.
     notificationEmailPreferences: jsonb("notification_email_preferences"),
+    // FR-CAL-06: only the hash is stored, exactly like invites.token_hash - the raw token is
+    // shown once at generation time and never persisted. null means no feed link issued yet.
+    calendarFeedTokenHash: text("calendar_feed_token_hash"),
     // FR-REL-03: used only to pick the gendered word in relationship labels (Son/Daughter,
     // Mother/Father, ...) shown on someone else's profile - not a general identity field.
     relationshipLabelGender: relationshipLabelGenderEnum("relationship_label_gender")

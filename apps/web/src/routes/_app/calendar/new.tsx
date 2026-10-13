@@ -1,5 +1,5 @@
 import { Button, Textarea } from "@plumas/ui";
-import type { EventHostType } from "@plumas/validators";
+import type { EventHostType, EventRecurrence } from "@plumas/validators";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useRef, useState } from "react";
 
@@ -33,6 +33,7 @@ function NewEvent() {
   const [endLocal, setEndLocal] = useState("");
   const [startDate, setStartDate] = useState("");
   const [location, setLocation] = useState("");
+  const [recurrence, setRecurrence] = useState<EventRecurrence>("none");
   const [hostChoice, setHostChoice] = useState<HostChoice>("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverAltText, setCoverAltText] = useState("");
@@ -69,6 +70,7 @@ function NewEvent() {
           location: location.trim() || undefined,
           hostType,
           hostId,
+          recurrence,
         },
       });
       if (coverFile) {
@@ -196,6 +198,24 @@ function NewEvent() {
             setLocation(event.target.value);
           }}
         />
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label htmlFor="event-repeats" className="text-sm font-medium">
+          Repeats
+        </label>
+        <select
+          id="event-repeats"
+          value={recurrence}
+          className="h-11 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+          onChange={(event) => {
+            setRecurrence(event.target.value as EventRecurrence);
+          }}
+        >
+          <option value="none">Does not repeat</option>
+          <option value="weekly">Weekly</option>
+          <option value="monthly">Monthly</option>
+        </select>
       </div>
 
       {myGroups.length > 0 || myBusinesses.length > 0 ? (

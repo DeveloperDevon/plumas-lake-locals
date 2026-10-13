@@ -20,6 +20,8 @@ export const notificationTypes = [
   "comment_on_listing",
   "dm_message",
   "dm_added_to_group",
+  "event_updated",
+  "event_cancelled",
 ] as const;
 export type NotificationType = (typeof notificationTypes)[number];
 

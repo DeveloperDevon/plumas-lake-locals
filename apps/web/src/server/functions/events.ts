@@ -6,10 +6,14 @@ import {
   deleteComment,
   deleteEvent,
   getEventById,
+  getEventRsvps,
   listCommentsForEvent,
   listEventsInRange,
+  regenerateCalendarFeedToken,
   removeEventReaction,
+  removeEventRsvp,
   setEventReaction,
+  setEventRsvp,
   updateComment,
   updateEvent,
 } from "@plumas/auth";
@@ -19,6 +23,7 @@ import {
   eventIdSchema,
   listEventsInRangeSchema,
   setEventReactionSchema,
+  setEventRsvpSchema,
   updateCommentSchema,
   updateEventSchema,
 } from "@plumas/validators";
@@ -64,6 +69,7 @@ export const createEventFn = createServerFn({ method: "POST" })
       location: data.location,
       hostType: data.hostType,
       hostId: data.hostId,
+      recurrence: data.recurrence,
     });
   });
 
@@ -80,6 +86,7 @@ export const updateEventFn = createServerFn({ method: "POST" })
       endsAt: data.endsAt ? new Date(data.endsAt) : undefined,
       allDay: data.allDay,
       location: data.location,
+      recurrence: data.recurrence,
     });
   });
 
@@ -154,3 +161,35 @@ export const removeEventReactionFn = createServerFn({ method: "POST" })
     await removeEventReaction(getDb(), data.eventId, user.id);
     return { ok: true as const };
   });
+
+export const getEventRsvpsFn = createServerFn({ method: "GET" })
+  .validator(eventIdSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    return getEventRsvps(getDb(), data.eventId, user.id);
+  });
+
+export const setEventRsvpFn = createServerFn({ method: "POST" })
+  .validator(setEventRsvpSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    await setEventRsvp(getDb(), data.eventId, user.id, data.status);
+    return { ok: true as const };
+  });
+
+export const removeEventRsvpFn = createServerFn({ method: "POST" })
+  .validator(eventIdSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    await removeEventRsvp(getDb(), data.eventId, user.id);
+    return { ok: true as const };
+  });
+
+/** FR-CAL-06: returns the raw token once - only its hash is ever stored. */
+export const regenerateCalendarFeedTokenFn = createServerFn({ method: "POST" }).handler(
+  async () => {
+    const user = await requireUser();
+    const token = await regenerateCalendarFeedToken(getDb(), user.id);
+    return { token };
+  },
+);

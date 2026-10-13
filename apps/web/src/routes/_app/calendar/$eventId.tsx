@@ -1,9 +1,9 @@
 import type { EventView } from "@plumas/auth";
 import { Button, Card, CardContent, CardHeader, CardTitle, Textarea } from "@plumas/ui";
-import type { ReactionType } from "@plumas/validators";
+import type { EventRecurrence, ReactionType, RsvpStatus } from "@plumas/validators";
 import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Repeat } from "lucide-react";
 import { useState } from "react";
 
 import { EventCommentsSection, EventReactionBar } from "../../../components/event-interactions";
@@ -19,6 +19,9 @@ import {
   getEventByIdFn,
   getEventCommentCountsFn,
   getEventReactionsFn,
+  getEventRsvpsFn,
+  removeEventRsvpFn,
+  setEventRsvpFn,
   updateEventFn,
 } from "../../../server/functions/events";
 
@@ -28,9 +31,10 @@ export const Route = createFileRoute("/_app/calendar/$eventId")({
     // eslint-disable-next-line @typescript-eslint/only-throw-error -- TanStack's own notFound().
     if (!event) throw notFound();
 
-    const [commentCounts, reactions] = await Promise.all([
+    const [commentCounts, reactions, rsvps] = await Promise.all([
       getEventCommentCountsFn({ data: { eventIds: [event.id] } }),
       getEventReactionsFn({ data: { eventIds: [event.id] } }),
+      getEventRsvpsFn({ data: { eventId: event.id } }),
     ]);
 
     return {
@@ -38,6 +42,8 @@ export const Route = createFileRoute("/_app/calendar/$eventId")({
       commentCount: commentCounts[event.id] ?? 0,
       reactionCounts: reactions.counts[event.id],
       myReaction: reactions.mine[event.id] ?? null,
+      rsvpCounts: rsvps.counts,
+      myRsvp: rsvps.mine,
     };
   },
   component: EventDetail,
@@ -71,6 +77,8 @@ function EventDetail() {
   const doDeleteEvent = useServerFn(deleteEventFn);
   const doGetReactions = useServerFn(getEventReactionsFn);
   const doGetCommentCounts = useServerFn(getEventCommentCountsFn);
+  const doSetRsvp = useServerFn(setEventRsvpFn);
+  const doRemoveRsvp = useServerFn(removeEventRsvpFn);
 
   const [event, setEvent] = useState<EventView>(initial.event);
   const [commentCount, setCommentCount] = useState(initial.commentCount);
@@ -78,9 +86,34 @@ function EventDetail() {
     initial.reactionCounts ?? emptyReactionCounts,
   );
   const [myReaction, setMyReaction] = useState<ReactionType | null>(initial.myReaction);
+  const [rsvpCounts, setRsvpCounts] = useState(initial.rsvpCounts);
+  const [myRsvp, setMyRsvp] = useState<RsvpStatus | null>(initial.myRsvp);
+  const [rsvping, setRsvping] = useState(false);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  async function handleRsvp(status: RsvpStatus) {
+    if (rsvping) return;
+    setRsvping(true);
+    try {
+      if (myRsvp === status) {
+        await doRemoveRsvp({ data: { eventId: event.id } });
+        setRsvpCounts((previous) => ({ ...previous, [status]: Math.max(0, previous[status] - 1) }));
+        setMyRsvp(null);
+      } else {
+        await doSetRsvp({ data: { eventId: event.id, status } });
+        setRsvpCounts((previous) => {
+          const next = { ...previous, [status]: previous[status] + 1 };
+          if (myRsvp) next[myRsvp] = Math.max(0, next[myRsvp] - 1);
+          return next;
+        });
+        setMyRsvp(status);
+      }
+    } finally {
+      setRsvping(false);
+    }
+  }
 
   const isCreator = event.createdBy === user.id;
 
@@ -122,7 +155,18 @@ function EventDetail() {
               <CalendarDays className="h-10 w-10 text-muted-foreground" />
             </div>
           )}
-          <h1 className="text-xl font-semibold">{event.title}</h1>
+          <h1 className="flex items-center gap-2 text-xl font-semibold">
+            {event.title}
+            {event.recurrence !== "none" ? (
+              <span
+                className="flex items-center gap-1 text-xs font-normal text-muted-foreground"
+                title={event.recurrence === "weekly" ? "Repeats weekly" : "Repeats monthly"}
+              >
+                <Repeat className="h-3.5 w-3.5" />
+                {event.recurrence === "weekly" ? "Weekly" : "Monthly"}
+              </span>
+            ) : null}
+          </h1>
           <p className="text-sm">
             {event.allDay
               ? formatEventTime(event.startsAt, { timeStyle: undefined })
@@ -133,6 +177,32 @@ function EventDetail() {
           {event.location ? (
             <p className="text-sm text-muted-foreground">{event.location}</p>
           ) : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={myRsvp === "going" ? "default" : "outline"}
+              disabled={rsvping}
+              onClick={() => void handleRsvp("going")}
+            >
+              Going ({rsvpCounts.going})
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant={myRsvp === "interested" ? "default" : "outline"}
+              disabled={rsvping}
+              onClick={() => void handleRsvp("interested")}
+            >
+              Interested ({rsvpCounts.interested})
+            </Button>
+            <a
+              href={`/api/calendar/events/${event.id}`}
+              className="text-sm font-medium text-primary hover:underline"
+            >
+              Add to calendar (.ics)
+            </a>
+          </div>
           <p className="text-xs text-muted-foreground">
             Posted by{" "}
             <Link
@@ -194,7 +264,14 @@ function EventDetail() {
           event={event}
           onSave={async (input) => {
             const updated = await doUpdateEvent({ data: { eventId: event.id, ...input } });
-            setEvent((previous) => ({ ...previous, ...updated }));
+            // doUpdateEvent's result is the raw events row (has `rrule`, not `recurrence`) -
+            // input.recurrence is exactly what was just saved, so it's used directly rather
+            // than re-deriving it from `updated.rrule` here.
+            setEvent((previous) => ({
+              ...previous,
+              ...updated,
+              recurrence: input.recurrence ?? "none",
+            }));
             setEditing(false);
           }}
         />
@@ -232,6 +309,7 @@ function EditEventPanel({
     endsAt?: string | undefined;
     allDay: boolean;
     location?: string | undefined;
+    recurrence?: EventRecurrence | undefined;
   }) => Promise<void>;
 }) {
   const [title, setTitle] = useState(event.title);
@@ -240,6 +318,7 @@ function EditEventPanel({
   const [startLocal, setStartLocal] = useState(utcToPacificWallClock(event.startsAt));
   const [endLocal, setEndLocal] = useState(event.endsAt ? utcToPacificWallClock(event.endsAt) : "");
   const [location, setLocation] = useState(event.location ?? "");
+  const [recurrence, setRecurrence] = useState<EventRecurrence>(event.recurrence);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -303,6 +382,23 @@ function EditEventPanel({
             setLocation(e.target.value);
           }}
         />
+        <div className="flex flex-col gap-1">
+          <label htmlFor="event-edit-repeats" className="text-sm font-medium">
+            Repeats
+          </label>
+          <select
+            id="event-edit-repeats"
+            value={recurrence}
+            className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+            onChange={(e) => {
+              setRecurrence(e.target.value as EventRecurrence);
+            }}
+          >
+            <option value="none">Does not repeat</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
+        </div>
         {error ? <p className="text-sm text-destructive">{error}</p> : null}
         <Button
           type="button"
@@ -319,6 +415,7 @@ function EditEventPanel({
                 !allDay && endLocal ? pacificWallClockToUtc(endLocal).toISOString() : undefined,
               allDay,
               location: location.trim() || undefined,
+              recurrence,
             })
               .catch((saveError: unknown) => {
                 setError(saveError instanceof Error ? saveError.message : "Couldn't save changes.");
