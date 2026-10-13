@@ -11,6 +11,7 @@
     "generate-types": "wrangler types",
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
+    "test": "vitest run",
     "deploy": "pnpm run build && wrangler deploy"
   },
   "dependencies": {
@@ -47,6 +48,7 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "vite": "^8.0.0",
+    "vitest": "^2.1.0",
     "wrangler": "^4.70.0"
   }
 }

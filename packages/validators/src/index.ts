@@ -3,6 +3,7 @@ export * from "./business";
 export * from "./comment";
 export * from "./common";
 export * from "./dm";
+export * from "./event";
 export * from "./group";
 export * from "./invite";
 export * from "./media";

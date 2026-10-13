@@ -85,6 +85,13 @@
       "when": 1791491133194,
       "tag": "0011_simple_giant_girl",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1791863354200,
+      "tag": "0012_windy_hydra",
+      "breakpoints": true
     }
   ]
 }

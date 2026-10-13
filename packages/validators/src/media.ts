@@ -12,6 +12,7 @@ export const mediaPurposes = [
   "business_logo",
   "business_cover",
   "business_gallery",
+  "event_cover",
 ] as const;
 export type MediaPurpose = (typeof mediaPurposes)[number];
 export const mediaPurposeSchema = z.enum(mediaPurposes);

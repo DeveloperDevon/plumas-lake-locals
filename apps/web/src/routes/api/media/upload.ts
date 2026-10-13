@@ -2,14 +2,17 @@ import {
   BusinessForbiddenError,
   countPostMedia,
   createMedia,
+  EventForbiddenError,
   getOwnedPost,
   GroupForbiddenError,
   PostForbiddenError,
   PostNotFoundError,
+  requireEventCreator,
   requireGroupAdmin,
   requireManager,
   setBusinessCover,
   setBusinessLogo,
+  setEventCover,
   setGroupCover,
   setUserAvatar,
   setUserCover,
@@ -56,6 +59,22 @@ export const Route = createFileRoute("/api/media/upload")({
         let postId: string | undefined;
         let groupId: string | undefined;
         let businessId: string | undefined;
+        let eventId: string | undefined;
+        if (purpose === "event_cover") {
+          const eventIdResult = z.string().uuid().safeParse(form.get("eventId"));
+          if (!eventIdResult.success) {
+            return Response.json({ ok: false, message: "Missing eventId." }, { status: 400 });
+          }
+          eventId = eventIdResult.data;
+          try {
+            await requireEventCreator(db, eventId, user.id);
+          } catch (error) {
+            if (error instanceof EventForbiddenError) {
+              return Response.json({ ok: false, message: error.message }, { status: 403 });
+            }
+            throw error;
+          }
+        }
         if (purpose === "group_cover") {
           const groupIdResult = z.string().uuid().safeParse(form.get("groupId"));
           if (!groupIdResult.success) {
@@ -147,6 +166,8 @@ export const Route = createFileRoute("/api/media/upload")({
           await setBusinessLogo(db, businessId, processed.r2KeyPrefix);
         } else if (purpose === "business_cover" && businessId) {
           await setBusinessCover(db, businessId, processed.r2KeyPrefix);
+        } else if (purpose === "event_cover" && eventId) {
+          await setEventCover(db, eventId, processed.r2KeyPrefix);
         }
 
         return Response.json({

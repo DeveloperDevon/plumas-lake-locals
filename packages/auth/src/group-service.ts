@@ -278,6 +278,34 @@ export async function listGroupsForUser(
   return rows.map((row, index) => ({ ...row, memberCount: counts[index] ?? 0 }));
 }
 
+/**
+ * FR-CAL-02: every group the user can actually post as (public or private) - used only for the
+ * user's own "pick a host" pickers, never surfaced to other viewers, so there's no FR-GRP-11
+ * leak the way there would be in listGroupsForUser.
+ */
+export async function listHostableGroupsForUser(
+  database: Database,
+  userId: string,
+): Promise<GroupSummary[]> {
+  const rows = await database
+    .select({
+      id: groups.id,
+      slug: groups.slug,
+      name: groups.name,
+      description: groups.description,
+      category: groups.category,
+      coverKey: groups.coverKey,
+      createdAt: groups.createdAt,
+    })
+    .from(groupMembers)
+    .innerJoin(groups, eq(groups.id, groupMembers.groupId))
+    .where(and(eq(groupMembers.userId, userId), eq(groupMembers.status, "active")))
+    .orderBy(desc(groups.createdAt));
+
+  const counts = await Promise.all(rows.map((row) => activeMemberCount(database, row.id)));
+  return rows.map((row, index) => ({ ...row, memberCount: counts[index] ?? 0 }));
+}
+
 /** FR-GRP-04: public groups only - private groups have no request-to-join (FR-GRP-11). */
 export async function requestToJoin(database: Database, groupId: string, userId: string) {
   const [group] = await database.select().from(groups).where(eq(groups.id, groupId));

@@ -2,7 +2,7 @@ import { type Database, schema } from "@plumas/db";
 import type { AdminDeleteTargetType, ReportReason, ReportTargetType } from "@plumas/validators";
 import { desc, eq, inArray, isNull } from "drizzle-orm";
 
-const { auditLog, businesses, comments, posts, reports, users } = schema;
+const { auditLog, businesses, comments, events, posts, reports, users } = schema;
 
 export class ModerationNotFoundError extends Error {
   constructor(message = "That no longer exists.") {
@@ -104,8 +104,9 @@ export async function listOpenReports(
   const businessIds = rows
     .filter((row) => row.targetType === "business")
     .map((row) => row.targetId);
+  const eventIds = rows.filter((row) => row.targetType === "event").map((row) => row.targetId);
 
-  const [postRows, commentRows, profileRows, businessRows] = await Promise.all([
+  const [postRows, commentRows, profileRows, businessRows, eventRows] = await Promise.all([
     postIds.length > 0
       ? database
           .select({ id: posts.id, body: posts.body })
@@ -130,11 +131,18 @@ export async function listOpenReports(
           .from(businesses)
           .where(inArray(businesses.id, businessIds))
       : Promise.resolve([]),
+    eventIds.length > 0
+      ? database
+          .select({ id: events.id, title: events.title })
+          .from(events)
+          .where(inArray(events.id, eventIds))
+      : Promise.resolve([]),
   ]);
   const postBodyById = new Map(postRows.map((row) => [row.id, row.body]));
   const commentBodyById = new Map(commentRows.map((row) => [row.id, row.body]));
   const profileNameById = new Map(profileRows.map((row) => [row.id, row.displayName]));
   const businessNameById = new Map(businessRows.map((row) => [row.id, row.name]));
+  const eventTitleById = new Map(eventRows.map((row) => [row.id, row.title]));
 
   return rows.map((row) => {
     let preview: string | null = null;
@@ -142,6 +150,7 @@ export async function listOpenReports(
     else if (row.targetType === "comment") preview = commentBodyById.get(row.targetId) ?? null;
     else if (row.targetType === "profile") preview = profileNameById.get(row.targetId) ?? null;
     else if (row.targetType === "business") preview = businessNameById.get(row.targetId) ?? null;
+    else if (row.targetType === "event") preview = eventTitleById.get(row.targetId) ?? null;
 
     return {
       id: row.id,
@@ -222,6 +231,20 @@ export async function adminDeleteContent(
   actingAdminId: string,
 ) {
   await requireAdmin(database, actingAdminId);
+
+  // Events are hard-deleted (no deletedAt column - see event-service.ts's deleteEvent), unlike
+  // posts/comments which are soft-deleted so reply threads never orphan.
+  if (targetType === "event") {
+    const [row] = await database.delete(events).where(eq(events.id, targetId)).returning();
+    if (!row) throw new ModerationNotFoundError();
+    await writeAuditLog(database, {
+      action: "delete_content",
+      targetType,
+      targetId,
+      actorId: actingAdminId,
+    });
+    return row;
+  }
 
   const table = targetType === "post" ? posts : comments;
   const [row] = await database

@@ -2,6 +2,7 @@ export * from "./business-service";
 export * from "./comment-service";
 export * from "./config";
 export * from "./dm-service";
+export * from "./event-service";
 export * from "./group-service";
 export * from "./invite-service";
 export * from "./media-service";

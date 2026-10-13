@@ -328,6 +328,9 @@ importers:
       vite:
         specifier: ^8.0.0
         version: 8.3.2(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)
+      vitest:
+        specifier: ^2.1.0
+        version: 2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0)
       wrangler:
         specifier: ^4.70.0
         version: 4.147.0(@types/node@22.20.5)
@@ -363,7 +366,7 @@ importers:
     dependencies:
       "@better-auth/passkey":
         specifier: 1.7.7
-        version: 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7(drizzle-orm@0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0))(next@15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0)))(better-call@1.4.0(zod@4.6.5))(nanostores@1.5.4)
+        version: 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7(@tanstack/react-start@1.168.60(esbuild@0.28.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rolldown@1.2.12)(rollup@4.64.0)(supports-color@7.2.0)(vite@8.3.2(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(drizzle-orm@0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0))(next@15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0)))(better-call@1.4.0(zod@4.6.5))(nanostores@1.5.4)
       "@plumas/db":
         specifier: workspace:*
         version: link:../db
@@ -375,7 +378,7 @@ importers:
         version: link:../validators
       better-auth:
         specifier: ^1.2.0
-        version: 1.7.7(drizzle-orm@0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0))(next@15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0))
+        version: 1.7.7(@tanstack/react-start@1.168.60(esbuild@0.28.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rolldown@1.2.12)(rollup@4.64.0)(supports-color@7.2.0)(vite@8.3.2(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(drizzle-orm@0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0))(next@15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0))
       drizzle-orm:
         specifier: ^0.36.0
         version: 0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0)
@@ -9404,14 +9407,14 @@ snapshots:
       nanostores: 1.5.4
       zod: 4.6.5
 
-  "@better-auth/passkey@1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7(drizzle-orm@0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0))(next@15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0)))(better-call@1.4.0(zod@4.6.5))(nanostores@1.5.4)":
+  "@better-auth/passkey@1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-auth@1.7.7(@tanstack/react-start@1.168.60(esbuild@0.28.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rolldown@1.2.12)(rollup@4.64.0)(supports-color@7.2.0)(vite@8.3.2(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(drizzle-orm@0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0))(next@15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0)))(better-call@1.4.0(zod@4.6.5))(nanostores@1.5.4)":
     dependencies:
       "@better-auth/core": 1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4)
       "@better-auth/utils": 0.4.2
       "@better-fetch/fetch": 1.3.2
       "@simplewebauthn/browser": 13.3.0
       "@simplewebauthn/server": 13.3.3
-      better-auth: 1.7.7(drizzle-orm@0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0))(next@15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0))
+      better-auth: 1.7.7(@tanstack/react-start@1.168.60(esbuild@0.28.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rolldown@1.2.12)(rollup@4.64.0)(supports-color@7.2.0)(vite@8.3.2(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(drizzle-orm@0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0))(next@15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0))
       better-call: 1.4.0(zod@4.6.5)
       nanostores: 1.5.4
       zod: 4.6.5
@@ -11574,6 +11577,36 @@ snapshots:
 
   baseline-browser-mapping@2.11.27: {}
 
+  better-auth@1.7.7(@tanstack/react-start@1.168.60(esbuild@0.28.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rolldown@1.2.12)(rollup@4.64.0)(supports-color@7.2.0)(vite@8.3.2(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(drizzle-orm@0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0))(next@15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0)):
+    dependencies:
+      "@better-auth/core": 1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4)
+      "@better-auth/drizzle-adapter": 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)(drizzle-orm@0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0))
+      "@better-auth/kysely-adapter": 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)(kysely@0.29.6)
+      "@better-auth/memory-adapter": 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)
+      "@better-auth/mongo-adapter": 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)
+      "@better-auth/prisma-adapter": 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)
+      "@better-auth/telemetry": 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)
+      "@better-auth/utils": 0.4.2
+      "@better-fetch/fetch": 1.3.2
+      "@noble/ciphers": 2.4.0
+      "@noble/hashes": 2.4.0
+      better-call: 1.4.0(zod@4.6.5)
+      defu: 6.1.7
+      jose: 6.2.12
+      kysely: 0.29.6
+      nanostores: 1.5.4
+      zod: 4.6.5
+    optionalDependencies:
+      "@tanstack/react-start": 1.168.60(esbuild@0.28.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rolldown@1.2.12)(rollup@4.64.0)(supports-color@7.2.0)(vite@8.3.2(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
+      drizzle-orm: 0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0)
+      next: 15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
+      pg: 8.23.1
+      react: 19.3.0
+      react-dom: 19.3.0(react@19.3.0)
+      vitest: 2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0)
+    transitivePeerDependencies:
+      - "@opentelemetry/api"
+
   better-auth@1.7.7(@tanstack/react-start@1.168.60(esbuild@0.28.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rolldown@1.2.12)(rollup@4.64.0)(supports-color@7.2.0)(vite@8.3.2(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1)))(next@15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0)):
     dependencies:
       "@better-auth/core": 1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@3.25.76))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4)
@@ -11595,35 +11628,6 @@ snapshots:
       zod: 4.6.5
     optionalDependencies:
       "@tanstack/react-start": 1.168.60(esbuild@0.28.2)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(rolldown@1.2.12)(rollup@4.64.0)(supports-color@7.2.0)(vite@8.3.2(@types/node@22.20.5)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
-      next: 15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
-      pg: 8.23.1
-      react: 19.3.0
-      react-dom: 19.3.0(react@19.3.0)
-      vitest: 2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0)
-    transitivePeerDependencies:
-      - "@opentelemetry/api"
-
-  better-auth@1.7.7(drizzle-orm@0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0))(next@15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(pg@8.23.1)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(vitest@2.1.9(@types/node@22.20.5)(lightningcss@1.33.0)(supports-color@7.2.0)):
-    dependencies:
-      "@better-auth/core": 1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4)
-      "@better-auth/drizzle-adapter": 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)(drizzle-orm@0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0))
-      "@better-auth/kysely-adapter": 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)(kysely@0.29.6)
-      "@better-auth/memory-adapter": 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)
-      "@better-auth/mongo-adapter": 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)
-      "@better-auth/prisma-adapter": 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)
-      "@better-auth/telemetry": 1.7.7(@better-auth/core@1.7.7(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)(better-call@1.4.0(zod@4.6.5))(jose@6.2.12)(kysely@0.29.6)(nanostores@1.5.4))(@better-auth/utils@0.4.2)(@better-fetch/fetch@1.3.2)
-      "@better-auth/utils": 0.4.2
-      "@better-fetch/fetch": 1.3.2
-      "@noble/ciphers": 2.4.0
-      "@noble/hashes": 2.4.0
-      better-call: 1.4.0(zod@4.6.5)
-      defu: 6.1.7
-      jose: 6.2.12
-      kysely: 0.29.6
-      nanostores: 1.5.4
-      zod: 4.6.5
-    optionalDependencies:
-      drizzle-orm: 0.36.4(@types/pg@8.23.1)(@types/react@19.3.0)(kysely@0.29.6)(pg@8.23.1)(postgres@3.4.9)(react@19.3.0)
       next: 15.1.2(@babel/core@7.24.5(supports-color@7.2.0))(@playwright/test@1.63.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       pg: 8.23.1
       react: 19.3.0

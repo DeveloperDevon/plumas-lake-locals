@@ -1,5 +1,6 @@
 import { Link } from "@tanstack/react-router";
 import {
+  CalendarDays,
   CircleUserRound,
   MessageCircle,
   Newspaper,
@@ -21,6 +22,7 @@ function navItems(userId: string, isAdmin: boolean): NavItem[] {
     { to: "/feed", label: "Feed", icon: Newspaper },
     { to: "/groups", label: "Groups", icon: Users },
     { to: "/businesses", label: "Businesses", icon: Store },
+    { to: "/calendar", label: "Calendar", icon: CalendarDays },
     { to: "/messages", label: "Messages", icon: MessageCircle },
     { to: `/profile/${userId}`, label: "Profile", icon: CircleUserRound },
     { to: "/settings", label: "Settings", icon: SettingsIcon },

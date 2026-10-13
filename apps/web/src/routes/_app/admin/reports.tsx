@@ -83,7 +83,9 @@ function Reports() {
                 >
                   Resolve
                 </Button>
-                {report.targetType === "post" || report.targetType === "comment" ? (
+                {report.targetType === "post" ||
+                report.targetType === "comment" ||
+                report.targetType === "event" ? (
                   <DeleteContentButton
                     targetType={report.targetType}
                     targetId={report.targetId}

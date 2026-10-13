@@ -12,6 +12,7 @@ import {
   listGroupPosts,
   listGroups,
   listGroupsForUser,
+  listHostableGroupsForUser,
   listMyGroupInvites,
   listPendingInvitesForGroup,
   listPendingJoinRequests,
@@ -50,6 +51,11 @@ export const getGroupsFn = createServerFn({ method: "GET" })
 export const getMyGroupsFn = createServerFn({ method: "GET" }).handler(async () => {
   const user = await requireUser();
   return listGroupsForUser(getDb(), user.id);
+});
+
+export const getMyHostableGroupsFn = createServerFn({ method: "GET" }).handler(async () => {
+  const user = await requireUser();
+  return listHostableGroupsForUser(getDb(), user.id);
 });
 
 export const getGroupsForUserFn = createServerFn({ method: "GET" })
