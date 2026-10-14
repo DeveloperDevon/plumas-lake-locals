@@ -12,6 +12,7 @@ import {
   uuid,
 } from "drizzle-orm/pg-core";
 
+import { tsvector } from "./custom-types";
 import { relationshipLabelGenderEnum, themeEnum, userRoleEnum, userStatusEnum } from "./enums";
 
 export const users = pgTable(
@@ -71,9 +72,14 @@ export const users = pgTable(
     ageAttestedAt: timestamp("age_attested_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    // FR-FEED-08: generated + GIN-indexed, kept current by Postgres itself on every write.
+    searchVector: tsvector("search_vector").generatedAlwaysAs(
+      sql`to_tsvector('english', coalesce(display_name, '') || ' ' || coalesce(bio, ''))`,
+    ),
   },
   (t) => [
     index("users_invited_by_idx").on(t.invitedBy),
+    index("users_search_vector_idx").using("gin", t.searchVector),
     check(
       "users_birthday_month_check",
       sql`${t.birthdayMonth} is null or ${t.birthdayMonth} between 1 and 12`,

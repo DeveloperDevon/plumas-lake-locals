@@ -1,23 +1,33 @@
-import { pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { index, pgTable, primaryKey, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
+import { tsvector } from "./custom-types";
 import { groupMemberRoleEnum, groupMemberStatusEnum, groupVisibilityEnum } from "./enums";
 import { users } from "./users";
 
-export const groups = pgTable("groups", {
-  id: uuid("id").primaryKey().defaultRandom(),
-  slug: text("slug").notNull().unique(),
-  name: text("name").notNull(),
-  description: text("description"),
-  category: text("category"),
-  coverKey: text("cover_key"),
-  coverAltText: text("cover_alt_text"),
-  ownerId: uuid("owner_id")
-    .notNull()
-    .references(() => users.id),
-  // FR-GRP-10/11: private groups are hidden from the directory, search and the calendar.
-  visibility: groupVisibilityEnum("visibility").notNull().default("public"),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+export const groups = pgTable(
+  "groups",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    slug: text("slug").notNull().unique(),
+    name: text("name").notNull(),
+    description: text("description"),
+    category: text("category"),
+    coverKey: text("cover_key"),
+    coverAltText: text("cover_alt_text"),
+    ownerId: uuid("owner_id")
+      .notNull()
+      .references(() => users.id),
+    // FR-GRP-10/11: private groups are hidden from the directory, search and the calendar.
+    visibility: groupVisibilityEnum("visibility").notNull().default("public"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // FR-FEED-08: generated + GIN-indexed, kept current by Postgres itself on every write.
+    searchVector: tsvector("search_vector").generatedAlwaysAs(
+      sql`to_tsvector('english', coalesce(name, '') || ' ' || coalesce(description, ''))`,
+    ),
+  },
+  (t) => [index("groups_search_vector_idx").using("gin", t.searchVector)],
+);
 
 export const groupMembers = pgTable(
   "group_members",

@@ -13,5 +13,6 @@ export * from "./notification";
 export * from "./post";
 export * from "./reaction";
 export * from "./relationship";
+export * from "./search";
 export * from "./theme";
 export * from "./user";

@@ -14,4 +14,5 @@ export * from "./password-service";
 export * from "./post-service";
 export * from "./profile-service";
 export * from "./relationship-service";
+export * from "./search-service";
 export * from "./theme-service";

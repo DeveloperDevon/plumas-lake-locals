@@ -5,6 +5,7 @@ import {
   CircleUserRound,
   MessageCircle,
   Newspaper,
+  Search,
   Settings as SettingsIcon,
   Shield,
   ShoppingBag,
@@ -23,6 +24,7 @@ interface NavItem {
 function navItems(userId: string, isAdmin: boolean, unreadCount: number): NavItem[] {
   const items: NavItem[] = [
     { to: "/feed", label: "Feed", icon: Newspaper },
+    { to: "/search", label: "Search", icon: Search },
     { to: "/groups", label: "Groups", icon: Users },
     { to: "/businesses", label: "Businesses", icon: Store },
     { to: "/calendar", label: "Calendar", icon: CalendarDays },

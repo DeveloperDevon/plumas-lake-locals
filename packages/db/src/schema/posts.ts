@@ -1,5 +1,7 @@
+import { sql } from "drizzle-orm";
 import { index, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
+import { tsvector } from "./custom-types";
 import { postCategoryEnum, postContextTypeEnum } from "./enums";
 import { users } from "./users";
 
@@ -23,9 +25,14 @@ export const posts = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     editedAt: timestamp("edited_at", { withTimezone: true }),
     deletedAt: timestamp("deleted_at", { withTimezone: true }),
+    // FR-FEED-08: generated + GIN-indexed, kept current by Postgres itself on every write.
+    searchVector: tsvector("search_vector").generatedAlwaysAs(
+      sql`to_tsvector('english', coalesce(body, ''))`,
+    ),
   },
   (t) => [
     // FR-FEED-02: reverse-chronological, cursor-paginated within a context.
     index("posts_context_idx").on(t.contextType, t.contextId, t.createdAt),
+    index("posts_search_vector_idx").using("gin", t.searchVector),
   ],
 );
