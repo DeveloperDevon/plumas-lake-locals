@@ -11,6 +11,7 @@ import { ReportToggle } from "../../../components/report-toggle";
 import { startConversationWithUser } from "../../../lib/dm-client";
 import { formatDate } from "../../../lib/format-date";
 import { mediaUrl, uploadImage } from "../../../lib/upload-image";
+import { blockUserFn } from "../../../server/functions/blocks";
 import { getBusinessesForUserFn } from "../../../server/functions/business";
 import { getGroupsForUserFn } from "../../../server/functions/groups";
 import { getUserMedia } from "../../../server/functions/media";
@@ -111,6 +112,7 @@ function ProfileView() {
           <div className="flex items-center gap-3">
             <MessageButton otherUserId={userId} />
             <ReportToggle targetType="profile" targetId={userId} />
+            <BlockButton otherUserId={userId} />
           </div>
         )}
       </div>
@@ -315,6 +317,42 @@ function MessageButton({ otherUserId }: { otherUserId: string }) {
       >
         <MessageCircle className="h-4 w-4" />
         Message
+      </button>
+      {error ? <p className="text-xs text-destructive">{error}</p> : null}
+    </div>
+  );
+}
+
+/**
+ * FR-MOD-03: blocking here is one-directional (Block only) - once blocked, getProfile returns
+ * null for both parties (profile-service.ts), so this page itself becomes unreachable for the
+ * blocker too. Unblocking happens from Settings > Blocked instead, the only place that stays
+ * reachable afterward.
+ */
+function BlockButton({ otherUserId }: { otherUserId: string }) {
+  const navigate = useNavigate();
+  const doBlock = useServerFn(blockUserFn);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        disabled={busy}
+        className="text-sm font-medium text-muted-foreground hover:text-destructive"
+        onClick={() => {
+          setBusy(true);
+          setError(null);
+          void doBlock({ data: { userId: otherUserId } })
+            .then(() => navigate({ to: "/feed" }))
+            .catch((blockError: unknown) => {
+              setError(blockError instanceof Error ? blockError.message : "Couldn't block.");
+              setBusy(false);
+            });
+        }}
+      >
+        Block
       </button>
       {error ? <p className="text-xs text-destructive">{error}</p> : null}
     </div>

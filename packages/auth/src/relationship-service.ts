@@ -3,6 +3,7 @@ import type { RelationshipType } from "@plumas/validators";
 import { inverseRelationshipType, relationshipLabel } from "@plumas/validators";
 import { and, eq, inArray, or } from "drizzle-orm";
 
+import { isBlockedEitherWay } from "./block-service";
 import { createNotification } from "./notification-service";
 
 const { relationships, users } = schema;
@@ -47,6 +48,10 @@ export interface RequestRelationshipInput {
 /** FR-REL-01/02: creates a pending request - "I am their <type>", stored with no inversion. */
 export async function requestRelationship(database: Database, input: RequestRelationshipInput) {
   if (input.fromUserId === input.toUserId) throw new RelationshipSelfError();
+  // FR-MOD-03.
+  if (await isBlockedEitherWay(database, input.fromUserId, input.toUserId)) {
+    throw new RelationshipForbiddenError("You can't send a relationship request to this member.");
+  }
 
   const existing = await database
     .select({ id: relationships.id })

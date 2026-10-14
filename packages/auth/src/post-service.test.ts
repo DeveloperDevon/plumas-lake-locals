@@ -1,6 +1,7 @@
 import { createDb, schema } from "@plumas/db";
 import { describe, expect, it } from "vitest";
 
+import { blockUser } from "./block-service";
 import {
   createPost,
   deletePost,
@@ -187,5 +188,23 @@ describe("post-service (integration, against the real local Postgres)", () => {
     const clearedPost = afterRemove.find((item) => item.id === post.id);
     expect(clearedPost?.reactionCounts.love).toBe(0);
     expect(clearedPost?.myReaction).toBeNull();
+  });
+
+  it("hides a blocked member's feed posts in both directions (FR-MOD-03)", async () => {
+    const alice = await makeMember();
+    const bob = await makeMember();
+    const alicePost = await createPost(db, { authorId: alice.id, body: "From Alice" });
+    const bobPost = await createPost(db, { authorId: bob.id, body: "From Bob" });
+
+    const hasPost = async (viewerId: string, postId: string) =>
+      (await listFeedPosts(db, { limit: 50, viewerId })).items.some((item) => item.id === postId);
+
+    expect(await hasPost(bob.id, alicePost.id)).toBe(true);
+    expect(await hasPost(alice.id, bobPost.id)).toBe(true);
+
+    await blockUser(db, alice.id, bob.id);
+
+    expect(await hasPost(bob.id, alicePost.id)).toBe(false); // Bob no longer sees Alice's post
+    expect(await hasPost(alice.id, bobPost.id)).toBe(false); // nor does Alice see Bob's - both ways
   });
 });

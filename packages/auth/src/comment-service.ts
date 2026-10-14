@@ -1,6 +1,7 @@
 import { type Database, schema } from "@plumas/db";
 import { and, asc, eq, inArray, isNull } from "drizzle-orm";
 
+import { isBlockedEitherWay } from "./block-service";
 import { createNotification } from "./notification-service";
 
 const { comments, posts, users } = schema;
@@ -103,6 +104,15 @@ export async function createComment(database: Database, input: CreateCommentInpu
     parentAuthorId = parent.userId;
   }
 
+  const [post] = await database
+    .select({ authorId: posts.authorId })
+    .from(posts)
+    .where(eq(posts.id, input.postId));
+  // FR-MOD-03: a blocked pair (either direction) can't comment on each other's posts.
+  if (post && (await isBlockedEitherWay(database, input.userId, post.authorId))) {
+    throw new CommentForbiddenError("You can't comment on this post.");
+  }
+
   const [row] = await database
     .insert(comments)
     .values({
@@ -114,11 +124,6 @@ export async function createComment(database: Database, input: CreateCommentInpu
     })
     .returning();
   if (!row) throw new Error("Failed to create comment");
-
-  const [post] = await database
-    .select({ authorId: posts.authorId })
-    .from(posts)
-    .where(eq(posts.id, input.postId));
 
   await notifyAboutComment(database, {
     targetType: "post",

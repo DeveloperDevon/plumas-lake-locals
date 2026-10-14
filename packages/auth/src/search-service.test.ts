@@ -1,6 +1,7 @@
 import { createDb, schema } from "@plumas/db";
 import { describe, expect, it } from "vitest";
 
+import { blockUser } from "./block-service";
 import { createBusiness, unpublishBusiness } from "./business-service";
 import { acceptGroupInvite, createGroup, inviteMember } from "./group-service";
 import { createPost, deletePost } from "./post-service";
@@ -167,5 +168,31 @@ describe("search-service (integration, against the real local Postgres)", () => 
     await unpublishBusiness(db, business.id, admin.id);
     results = await searchBusinessesRanked(db, token);
     expect(results.some((row) => row.id === business.id)).toBe(false);
+  });
+
+  it("excludes a blocked member and their posts from search, either direction (FR-MOD-03)", async () => {
+    const viewer = await makeMember("viewer-blocked-search");
+    const token = `jackalope${crypto.randomUUID().slice(0, 8)}`;
+    const blocked = await makeMember(`blocked-${token}`);
+    const post = await createPost(db, {
+      authorId: blocked.id,
+      body: `${token} spotted near the trailhead`,
+    });
+
+    expect(
+      (await searchMembersRanked(db, token, viewer.id)).some((row) => row.id === blocked.id),
+    ).toBe(true);
+    expect((await searchPostsRanked(db, token, viewer.id)).some((row) => row.id === post.id)).toBe(
+      true,
+    );
+
+    await blockUser(db, viewer.id, blocked.id);
+
+    expect(
+      (await searchMembersRanked(db, token, viewer.id)).some((row) => row.id === blocked.id),
+    ).toBe(false);
+    expect((await searchPostsRanked(db, token, viewer.id)).some((row) => row.id === post.id)).toBe(
+      false,
+    );
   });
 });

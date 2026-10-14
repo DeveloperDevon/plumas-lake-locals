@@ -2,6 +2,7 @@ import { createDb, schema } from "@plumas/db";
 import { eq } from "drizzle-orm";
 import { describe, expect, it } from "vitest";
 
+import { blockUser } from "./block-service";
 import {
   claimKeyPackageForUser,
   createDirectConversation,
@@ -13,6 +14,7 @@ import {
   listMessages,
   publishKeyPackages,
   registerDevice,
+  searchMembers,
   sendMessage,
   upsertBackup,
 } from "./dm-service";
@@ -207,5 +209,76 @@ describe("dm-service (integration, against the real local Postgres)", () => {
     await makeDeviceWithKeyPackage(dana.id);
     const list = await listDevicesForUser(db, dana.id);
     expect(list).toHaveLength(2);
+  });
+
+  it("rejects starting a new conversation with a blocked member, either direction (FR-MOD-03)", async () => {
+    const alice = await makeMember("alice-blocked-dm");
+    const bob = await makeMember("bob-blocked-dm");
+    const aliceDevice = await makeDeviceWithKeyPackage(alice.id);
+
+    await blockUser(db, bob.id, alice.id);
+
+    await expect(
+      createDirectConversation(db, {
+        conversationId: crypto.randomUUID(),
+        requesterId: alice.id,
+        requesterDeviceId: aliceDevice.id,
+        otherUserId: bob.id,
+        epoch: 1,
+        welcomeBytes: Buffer.from("welcome"),
+      }),
+    ).rejects.toThrow(DmForbiddenError);
+  });
+
+  it("stops an existing conversation from accepting new messages once either side blocks the other (FR-MOD-03)", async () => {
+    const alice = await makeMember("alice-blocked-send");
+    const bob = await makeMember("bob-blocked-send");
+    const aliceDevice = await makeDeviceWithKeyPackage(alice.id);
+    const bobDevice = await makeDeviceWithKeyPackage(bob.id);
+
+    const conversation = await createDirectConversation(db, {
+      conversationId: crypto.randomUUID(),
+      requesterId: alice.id,
+      requesterDeviceId: aliceDevice.id,
+      otherUserId: bob.id,
+      epoch: 1,
+      welcomeBytes: Buffer.from("welcome"),
+    });
+
+    await blockUser(db, bob.id, alice.id);
+
+    await expect(
+      sendMessage(db, {
+        conversationId: conversation.id,
+        senderUserId: alice.id,
+        senderDeviceId: aliceDevice.id,
+        epoch: 1,
+        ciphertext: Buffer.from("hello"),
+      }),
+    ).rejects.toThrow(DmForbiddenError);
+    await expect(
+      sendMessage(db, {
+        conversationId: conversation.id,
+        senderUserId: bob.id,
+        senderDeviceId: bobDevice.id,
+        epoch: 1,
+        ciphertext: Buffer.from("hello"),
+      }),
+    ).rejects.toThrow(DmForbiddenError);
+  });
+
+  it("excludes a blocked member from the DM composer's member search (FR-MOD-03)", async () => {
+    const searcher = await makeMember("searcher-blocked-search");
+    const token = `huckleberry${crypto.randomUUID().slice(0, 8)}`;
+    const target = await makeMember(`${token}-target`);
+
+    expect((await searchMembers(db, token, searcher.id)).some((row) => row.id === target.id)).toBe(
+      true,
+    );
+
+    await blockUser(db, searcher.id, target.id);
+    expect((await searchMembers(db, token, searcher.id)).some((row) => row.id === target.id)).toBe(
+      false,
+    );
   });
 });

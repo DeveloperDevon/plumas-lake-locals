@@ -6,6 +6,7 @@ import type {
 } from "@plumas/validators";
 import { eq } from "drizzle-orm";
 
+import { isBlockedEitherWay } from "./block-service";
 import { hasAcceptedRelationship } from "./relationship-service";
 
 const { users } = schema;
@@ -66,6 +67,10 @@ export async function getProfile(
 ): Promise<ProfileView | null> {
   const [user] = await database.select().from(users).where(eq(users.id, userId));
   if (!user) return null;
+
+  // FR-MOD-03: same "not found" contract getEventById/getGroupBySlug already use for a
+  // viewer who can't see something, rather than a distinct "blocked" error.
+  if (viewerId !== userId && (await isBlockedEitherWay(database, viewerId, userId))) return null;
 
   let inviterDisplayName: string | null = null;
   if (user.invitedBy) {

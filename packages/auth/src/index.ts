@@ -1,3 +1,4 @@
+export * from "./block-service";
 export * from "./business-service";
 export * from "./comment-service";
 export * from "./config";

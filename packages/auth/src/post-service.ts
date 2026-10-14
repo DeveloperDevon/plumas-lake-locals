@@ -1,8 +1,9 @@
 import { type Database, schema } from "@plumas/db";
 import type { PostCategory, ReactionType } from "@plumas/validators";
 import { reactionTypes } from "@plumas/validators";
-import { and, count, desc, eq, inArray, isNotNull, isNull, lt } from "drizzle-orm";
+import { and, count, desc, eq, inArray, isNotNull, isNull, lt, notInArray } from "drizzle-orm";
 
+import { getBlockedUserIdSet } from "./block-service";
 import { countCommentsForPosts } from "./comment-service";
 import { createNotification } from "./notification-service";
 
@@ -230,6 +231,9 @@ export async function listFeedPosts(
     isNull(posts.pinnedAt),
   ];
   if (cursor) conditions.push(lt(posts.createdAt, new Date(cursor)));
+  // FR-MOD-03: hides a blocked (either direction) member's posts.
+  const blockedIds = await getBlockedUserIdSet(database, viewerId);
+  if (blockedIds.size > 0) conditions.push(notInArray(posts.authorId, [...blockedIds]));
 
   const rows = await database
     .select({
@@ -283,6 +287,8 @@ export async function listGroupPosts(
     isNull(posts.deletedAt),
   ];
   if (cursor) conditions.push(lt(posts.createdAt, new Date(cursor)));
+  const blockedIds = await getBlockedUserIdSet(database, viewerId);
+  if (blockedIds.size > 0) conditions.push(notInArray(posts.authorId, [...blockedIds]));
 
   const rows = await database
     .select({
@@ -336,6 +342,8 @@ export async function listBusinessPosts(
     isNull(posts.deletedAt),
   ];
   if (cursor) conditions.push(lt(posts.createdAt, new Date(cursor)));
+  const blockedIds = await getBlockedUserIdSet(database, viewerId);
+  if (blockedIds.size > 0) conditions.push(notInArray(posts.authorId, [...blockedIds]));
 
   const rows = await database
     .select({
@@ -373,6 +381,10 @@ export async function listBusinessPosts(
 
 /** FR-FEED-07: at most 3, newest-pinned first. Fetched fresh every time, not paginated. */
 export async function listPinnedPosts(database: Database, viewerId: string): Promise<FeedPost[]> {
+  const blockedIds = await getBlockedUserIdSet(database, viewerId);
+  const conditions = [isNull(posts.deletedAt), isNotNull(posts.pinnedAt)];
+  if (blockedIds.size > 0) conditions.push(notInArray(posts.authorId, [...blockedIds]));
+
   const rows = await database
     .select({
       id: posts.id,
@@ -387,7 +399,7 @@ export async function listPinnedPosts(database: Database, viewerId: string): Pro
     })
     .from(posts)
     .innerJoin(users, eq(posts.authorId, users.id))
-    .where(and(isNull(posts.deletedAt), isNotNull(posts.pinnedAt)))
+    .where(and(...conditions))
     .orderBy(desc(posts.pinnedAt))
     .limit(MAX_PINNED_POSTS);
 

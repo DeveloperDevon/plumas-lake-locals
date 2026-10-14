@@ -1,6 +1,7 @@
 import { createDb, schema } from "@plumas/db";
 import { describe, expect, it } from "vitest";
 
+import { blockUser } from "./block-service";
 import {
   acceptRelationship,
   getRelationshipBetween,
@@ -164,5 +165,18 @@ describe("relationship-service (integration, against the real local Postgres)", 
 
     await acceptRelationship(db, request.id, jordan.id);
     expect(await hasAcceptedRelationship(db, maria.id, jordan.id)).toBe(true);
+  });
+
+  it("rejects a relationship request between a blocked pair, either direction (FR-MOD-03)", async () => {
+    const alice = await makeMember();
+    const bob = await makeMember();
+    await blockUser(db, bob.id, alice.id);
+
+    await expect(
+      requestRelationship(db, { fromUserId: alice.id, toUserId: bob.id, type: "friend" }),
+    ).rejects.toThrow(RelationshipForbiddenError);
+    await expect(
+      requestRelationship(db, { fromUserId: bob.id, toUserId: alice.id, type: "friend" }),
+    ).rejects.toThrow(RelationshipForbiddenError);
   });
 });

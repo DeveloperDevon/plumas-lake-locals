@@ -1,5 +1,7 @@
 import { type Database, schema } from "@plumas/db";
-import { and, eq, inArray, isNull, ne, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
+
+import { getBlockedUserIdSet } from "./block-service";
 
 const { businesses, groupMembers, groups, posts, users } = schema;
 
@@ -24,16 +26,19 @@ export async function searchMembersRanked(
   viewerId: string,
 ): Promise<MemberSearchResult[]> {
   const tsquery = sql`plainto_tsquery('english', ${query})`;
+  // FR-MOD-03.
+  const blockedIds = await getBlockedUserIdSet(database, viewerId);
+  const conditions = [
+    sql`${users.searchVector} @@ ${tsquery}`,
+    eq(users.status, "active"),
+    ne(users.id, viewerId),
+  ];
+  if (blockedIds.size > 0) conditions.push(notInArray(users.id, [...blockedIds]));
+
   return database
     .select({ id: users.id, displayName: users.displayName, avatarKey: users.avatarKey })
     .from(users)
-    .where(
-      and(
-        sql`${users.searchVector} @@ ${tsquery}`,
-        eq(users.status, "active"),
-        ne(users.id, viewerId),
-      ),
-    )
+    .where(and(...conditions))
     .orderBy(sql`ts_rank(${users.searchVector}, ${tsquery}) desc`)
     .limit(RESULTS_PER_TYPE);
 }
@@ -119,6 +124,11 @@ export async function searchPostsRanked(
   viewerId: string,
 ): Promise<PostSearchResult[]> {
   const tsquery = sql`plainto_tsquery('english', ${query})`;
+  // FR-MOD-03.
+  const blockedIds = await getBlockedUserIdSet(database, viewerId);
+  const conditions = [sql`${posts.searchVector} @@ ${tsquery}`, isNull(posts.deletedAt)];
+  if (blockedIds.size > 0) conditions.push(notInArray(posts.authorId, [...blockedIds]));
+
   const rows = await database
     .select({
       id: posts.id,
@@ -132,7 +142,7 @@ export async function searchPostsRanked(
     })
     .from(posts)
     .innerJoin(users, eq(posts.authorId, users.id))
-    .where(and(sql`${posts.searchVector} @@ ${tsquery}`, isNull(posts.deletedAt)))
+    .where(and(...conditions))
     .orderBy(sql`ts_rank(${posts.searchVector}, ${tsquery}) desc`)
     .limit(POST_OVERFETCH);
 

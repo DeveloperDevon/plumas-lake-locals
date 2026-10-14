@@ -9,6 +9,7 @@ const tabs = [
   { to: "/settings/messaging", label: "Messaging" },
   { to: "/settings/notifications", label: "Notifications" },
   { to: "/settings/calendar", label: "Calendar" },
+  { to: "/settings/blocked", label: "Blocked" },
   { to: "/settings/account", label: "Account" },
 ];
 

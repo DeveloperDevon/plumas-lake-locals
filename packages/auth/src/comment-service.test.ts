@@ -1,6 +1,7 @@
 import { createDb, schema } from "@plumas/db";
 import { describe, expect, it } from "vitest";
 
+import { blockUser } from "./block-service";
 import {
   CommentForbiddenError,
   CommentNotFoundError,
@@ -172,5 +173,17 @@ describe("comment-service (integration, against the real local Postgres)", () =>
     expect(replyRow?.parentId).toBe(parent.id);
 
     await expect(deleteComment(db, parent.id, author.id)).rejects.toThrow(CommentNotFoundError);
+  });
+
+  it("blocks a blocked pair (either direction) from commenting on each other's posts (FR-MOD-03)", async () => {
+    const author = await makeMember();
+    const commenter = await makeMember();
+    const post = await createPost(db, { authorId: author.id, body: "Hello neighbors" });
+
+    await blockUser(db, commenter.id, author.id);
+
+    await expect(
+      createComment(db, { postId: post.id, userId: commenter.id, body: "Blocked attempt" }),
+    ).rejects.toThrow(CommentForbiddenError);
   });
 });

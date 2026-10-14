@@ -1,7 +1,8 @@
 import { type Database, schema } from "@plumas/db";
-import { and, asc, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
+import { getBlockedUserIdSet, isBlockedEitherWay } from "./block-service";
 import { createNotification } from "./notification-service";
 
 const {
@@ -108,16 +109,19 @@ export async function listDevicesForUser(database: Database, userId: string) {
 export async function searchMembers(database: Database, query: string, excludeUserId: string) {
   const trimmed = query.trim();
   if (trimmed.length === 0) return [];
+  // FR-MOD-03.
+  const blockedIds = await getBlockedUserIdSet(database, excludeUserId);
+  const conditions = [
+    sql`${users.displayName} ilike ${`%${trimmed}%`}`,
+    eq(users.status, "active"),
+    ne(users.id, excludeUserId),
+  ];
+  if (blockedIds.size > 0) conditions.push(notInArray(users.id, [...blockedIds]));
+
   return database
     .select({ id: users.id, displayName: users.displayName, avatarKey: users.avatarKey })
     .from(users)
-    .where(
-      and(
-        sql`${users.displayName} ilike ${`%${trimmed}%`}`,
-        eq(users.status, "active"),
-        sql`${users.id} != ${excludeUserId}`,
-      ),
-    )
+    .where(and(...conditions))
     .limit(20);
 }
 
@@ -184,6 +188,10 @@ export async function createDirectConversation(
   input: CreateDirectConversationInput,
 ) {
   if (input.requesterId === input.otherUserId) throw new DmSelfConversationError();
+  // FR-MOD-03.
+  if (await isBlockedEitherWay(database, input.requesterId, input.otherUserId)) {
+    throw new DmForbiddenError("You can't message this member.");
+  }
   const [userA, userB] = sortedPair(input.requesterId, input.otherUserId);
 
   try {
@@ -542,6 +550,27 @@ export interface SendMessageInput {
 /** FR-DM-09: stores ciphertext only - no plaintext ever passes through this function. */
 export async function sendMessage(database: Database, input: SendMessageInput) {
   await requireActiveParticipant(database, input.conversationId, input.senderUserId);
+
+  // FR-MOD-03: only direct (1:1) conversations are gated - a shared group chat's existing
+  // membership isn't retroactively broken by a block between two of its members, same as this
+  // task's relationship/comment gates only stop *new* interactions, not unwind existing ones.
+  const [conversation] = await database
+    .select({
+      kind: conversations.kind,
+      directUserA: conversations.directUserA,
+      directUserB: conversations.directUserB,
+    })
+    .from(conversations)
+    .where(eq(conversations.id, input.conversationId));
+  if (conversation?.kind === "direct") {
+    const otherUserId =
+      conversation.directUserA === input.senderUserId
+        ? conversation.directUserB
+        : conversation.directUserA;
+    if (otherUserId && (await isBlockedEitherWay(database, input.senderUserId, otherUserId))) {
+      throw new DmForbiddenError("You can't message this member.");
+    }
+  }
 
   const [row] = await database
     .insert(messages)

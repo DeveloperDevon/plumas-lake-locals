@@ -1,6 +1,7 @@
 import { createDb, schema } from "@plumas/db";
 import { describe, expect, it } from "vitest";
 
+import { blockUser } from "./block-service";
 import { getProfile, updateProfile } from "./profile-service";
 import { acceptRelationship, requestRelationship } from "./relationship-service";
 
@@ -144,5 +145,25 @@ describe("profile-service (integration, against the real local Postgres)", () =>
 
   it("returns null for an unknown user id", async () => {
     await expect(getProfile(db, crypto.randomUUID(), crypto.randomUUID())).resolves.toBeNull();
+  });
+
+  it("returns null for a blocked viewer's profile read, either direction (FR-MOD-03)", async () => {
+    const [alice] = await db
+      .insert(users)
+      .values({ email: uniqueEmail("alice-blocked-profile"), displayName: "Alice" })
+      .returning();
+    const [bob] = await db
+      .insert(users)
+      .values({ email: uniqueEmail("bob-blocked-profile"), displayName: "Bob" })
+      .returning();
+    if (!alice || !bob) throw new Error("setup failed");
+
+    expect(await getProfile(db, bob.id, alice.id)).not.toBeNull();
+
+    await blockUser(db, bob.id, alice.id);
+    expect(await getProfile(db, bob.id, alice.id)).toBeNull();
+    expect(await getProfile(db, alice.id, bob.id)).toBeNull();
+    // A blocked user can still load their own profile.
+    expect(await getProfile(db, bob.id, bob.id)).not.toBeNull();
   });
 });
