@@ -11,6 +11,8 @@ import {
   claimKeyPackageFn,
   createBackupFn,
   getBackupFn,
+  getMessagesFn,
+  getMyConversationsFn,
   getPendingDeparturesFn,
   publishKeyPackagesFn,
   recordDeviceLinkFn,
@@ -204,6 +206,52 @@ export async function decryptMessages(
       createdAt: row.createdAt,
     });
   }
+  return results;
+}
+
+export interface ExportedConversation {
+  conversationId: string;
+  displayName: string;
+  messages: DecryptedMessage[];
+}
+
+/**
+ * FR-MOD-06: "DM history exported on the member's device" - the server only ever holds
+ * ciphertext (see messages.ts's schema comment), so this walks every conversation and every
+ * page of it client-side, decrypting with the same decryptMessages() the open-conversation view
+ * already uses, rather than a server endpoint. A message this device never built MLS tree state
+ * for (a conversation this device was never opened on) comes back with `plaintext: null`, same
+ * as decryptMessages already does today for that case - kept in the export rather than dropped,
+ * so the export is honest about what this device actually has.
+ */
+export async function exportAllConversations(
+  onProgress?: (conversationsDone: number, conversationsTotal: number) => void,
+): Promise<ExportedConversation[]> {
+  const conversations = await getMyConversationsFn();
+  const results: ExportedConversation[] = [];
+
+  for (const [index, conversation] of conversations.entries()) {
+    const rows: Parameters<typeof decryptMessages>[1] = [];
+    let cursor: string | undefined;
+    for (;;) {
+      const page = await getMessagesFn({
+        data: { conversationId: conversation.id, cursor, limit: 100 },
+      });
+      rows.push(...page);
+      if (page.length < 100) break;
+      const last = page[page.length - 1];
+      if (!last) break;
+      cursor = last.id;
+    }
+
+    results.push({
+      conversationId: conversation.id,
+      displayName: conversation.displayName,
+      messages: await decryptMessages(conversation.id, rows),
+    });
+    onProgress?.(index + 1, conversations.length);
+  }
+
   return results;
 }
 

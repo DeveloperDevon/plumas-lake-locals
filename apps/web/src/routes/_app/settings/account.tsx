@@ -3,7 +3,21 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 
+import { exportAllConversations } from "../../../lib/dm-client";
+import { exportAccountDataFn } from "../../../server/functions/export";
 import { getHasPassword, setPassword, signOut } from "../../../server/functions/session";
+
+/** Only file-download mechanism in this client (confirmed none existed before this feature) -
+ * kept local here since both buttons below are its only two call sites. */
+function downloadJson(filename: string, data: unknown) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(url);
+}
 
 export const Route = createFileRoute("/_app/settings/account")({
   loader: async () => ({ hasPassword: await getHasPassword() }),
@@ -16,12 +30,54 @@ function Account() {
 
   const doSignOut = useServerFn(signOut);
   const doSetPassword = useServerFn(setPassword);
+  const doExportAccountData = useServerFn(exportAccountDataFn);
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [passwordState, setPasswordState] = useState<
     { status: "idle" } | { status: "submitting" } | { status: "error"; message: string }
   >({ status: "idle" });
+
+  const [exportingAccount, setExportingAccount] = useState(false);
+  const [exportingMessages, setExportingMessages] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  async function handleExportAccountData() {
+    setExportingAccount(true);
+    setExportError(null);
+    try {
+      const data = await doExportAccountData();
+      downloadJson(
+        `plumas-lake-locals-account-${new Date().toISOString().slice(0, 10)}.json`,
+        data,
+      );
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Couldn't export your data.");
+    } finally {
+      setExportingAccount(false);
+    }
+  }
+
+  async function handleExportMessages() {
+    setExportingMessages({ done: 0, total: 0 });
+    setExportError(null);
+    try {
+      const data = await exportAllConversations((done, total) => {
+        setExportingMessages({ done, total });
+      });
+      downloadJson(
+        `plumas-lake-locals-messages-${new Date().toISOString().slice(0, 10)}.json`,
+        data,
+      );
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : "Couldn't export your messages.");
+    } finally {
+      setExportingMessages(null);
+    }
+  }
 
   async function refresh() {
     await router.invalidate();
@@ -94,6 +150,44 @@ function Account() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Download my data</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-muted-foreground">
+              Your profile, posts, comments, groups, events and listings, as a JSON file.
+            </p>
+            <Button
+              variant="outline"
+              className="w-fit"
+              disabled={exportingAccount}
+              onClick={() => void handleExportAccountData()}
+            >
+              {exportingAccount ? "Preparing..." : "Download account data"}
+            </Button>
+          </div>
+          <div className="flex flex-col gap-2">
+            <p className="text-sm text-muted-foreground">
+              Your direct message history, decrypted on this device - the server never sees the
+              plaintext, so this can take a little while for a lot of history.
+            </p>
+            <Button
+              variant="outline"
+              className="w-fit"
+              disabled={exportingMessages !== null}
+              onClick={() => void handleExportMessages()}
+            >
+              {exportingMessages
+                ? `Decrypting... (${exportingMessages.done.toString()}/${exportingMessages.total.toString()})`
+                : "Download message history"}
+            </Button>
+          </div>
+          {exportError ? <p className="text-sm text-destructive">{exportError}</p> : null}
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
