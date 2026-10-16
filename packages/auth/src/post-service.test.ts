@@ -7,6 +7,7 @@ import {
   deletePost,
   listFeedPosts,
   listPinnedPosts,
+  listPostsByAuthor,
   pinPost,
   PostForbiddenError,
   PostNotFoundError,
@@ -206,5 +207,81 @@ describe("post-service (integration, against the real local Postgres)", () => {
 
     expect(await hasPost(bob.id, alicePost.id)).toBe(false); // Bob no longer sees Alice's post
     expect(await hasPost(alice.id, bobPost.id)).toBe(false); // nor does Alice see Bob's - both ways
+  });
+
+  it("listPostsByAuthor (FR-PRO-06) returns only this author's own feed posts, not another author's or their group/business board posts", async () => {
+    const author = await makeMember();
+    const someoneElse = await makeMember();
+    const feedPost = await createPost(db, { authorId: author.id, body: "My feed post" });
+    await createPost(db, {
+      authorId: author.id,
+      body: "My group post",
+      contextType: "group",
+      contextId: crypto.randomUUID(),
+    });
+    await createPost(db, { authorId: someoneElse.id, body: "Someone else's post" });
+
+    const { items } = await listPostsByAuthor(db, {
+      authorId: author.id,
+      limit: 20,
+      viewerId: author.id,
+    });
+
+    expect(items).toHaveLength(1);
+    expect(items[0]?.id).toBe(feedPost.id);
+  });
+
+  it("listPostsByAuthor excludes soft-deleted posts and paginates like the feed", async () => {
+    const author = await makeMember();
+    const deleted = await createPost(db, { authorId: author.id, body: "Will be deleted" });
+    await deletePost(db, deleted.id, author.id);
+    const created: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      const post = await createPost(db, { authorId: author.id, body: `Post ${i.toString()}` });
+      created.push(post.id);
+      // Cursor is millisecond-precision createdAt - a tight loop with a warm connection can
+      // otherwise create two rows in the same millisecond and make the cursor boundary ambiguous.
+      await new Promise((resolve) => setTimeout(resolve, 2));
+    }
+
+    const firstPage = await listPostsByAuthor(db, {
+      authorId: author.id,
+      limit: 2,
+      viewerId: author.id,
+    });
+    expect(firstPage.items.every((item) => item.id !== deleted.id)).toBe(true);
+    expect(firstPage.items).toHaveLength(2);
+    expect(firstPage.nextCursor).not.toBeNull();
+
+    const secondPage = await listPostsByAuthor(db, {
+      authorId: author.id,
+      limit: 2,
+      cursor: firstPage.nextCursor ?? undefined,
+      viewerId: author.id,
+    });
+    expect(secondPage.items).toHaveLength(1);
+    expect(secondPage.nextCursor).toBeNull();
+  });
+
+  it("listPostsByAuthor respects blocking (FR-MOD-03), both directions", async () => {
+    const author = await makeMember();
+    const viewer = await makeMember();
+    const post = await createPost(db, { authorId: author.id, body: "Visible until blocked" });
+
+    const before = await listPostsByAuthor(db, {
+      authorId: author.id,
+      limit: 20,
+      viewerId: viewer.id,
+    });
+    expect(before.items.some((item) => item.id === post.id)).toBe(true);
+
+    await blockUser(db, author.id, viewer.id);
+
+    const after = await listPostsByAuthor(db, {
+      authorId: author.id,
+      limit: 20,
+      viewerId: viewer.id,
+    });
+    expect(after.items.some((item) => item.id === post.id)).toBe(false);
   });
 });

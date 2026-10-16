@@ -7,6 +7,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { CircleUserRound, MessageCircle, Store, Users } from "lucide-react";
 import { useRef, useState } from "react";
 
+import { type FeedPostData, PostCard } from "../../../components/post-card";
 import { ReportToggle } from "../../../components/report-toggle";
 import { startConversationWithUser } from "../../../lib/dm-client";
 import { formatDate } from "../../../lib/format-date";
@@ -15,6 +16,7 @@ import { blockUserFn } from "../../../server/functions/blocks";
 import { getBusinessesForUserFn } from "../../../server/functions/business";
 import { getGroupsForUserFn } from "../../../server/functions/groups";
 import { getUserMedia } from "../../../server/functions/media";
+import { getPostsByAuthor } from "../../../server/functions/posts";
 import { getProfileById } from "../../../server/functions/profile";
 import {
   acceptRelationshipFn,
@@ -28,7 +30,7 @@ import {
 export const Route = createFileRoute("/_app/profile/$userId")({
   loader: async ({ params }) => {
     const profile = await getProfileById({ data: { userId: params.userId } });
-    const [media, relationships, status, pending, groups, businesses] = await Promise.all([
+    const [media, relationships, status, pending, groups, businesses, posts] = await Promise.all([
       getUserMedia({ data: { userId: params.userId } }),
       getRelationshipsForProfile({ data: { userId: params.userId } }),
       profile && !profile.isOwner
@@ -37,8 +39,9 @@ export const Route = createFileRoute("/_app/profile/$userId")({
       profile?.isOwner ? getMyPendingRequests() : Promise.resolve({ incoming: [], outgoing: [] }),
       getGroupsForUserFn({ data: { userId: params.userId } }),
       getBusinessesForUserFn({ data: { userId: params.userId } }),
+      getPostsByAuthor({ data: { userId: params.userId, limit: 20 } }),
     ]);
-    return { profile, media, relationships, status, pending, groups, businesses };
+    return { profile, media, relationships, status, pending, groups, businesses, posts };
   },
   component: ProfileView,
 });
@@ -52,9 +55,10 @@ function formatBirthday(month: number | null, day: number | null): string | null
 }
 
 function ProfileView() {
-  const { profile, media, relationships, status, pending, groups, businesses } =
+  const { profile, media, relationships, status, pending, groups, businesses, posts } =
     Route.useLoaderData();
   const { userId } = Route.useParams();
+  const { user: currentUser } = Route.useRouteContext();
   const router = useRouter();
   const inputRef = useRef<HTMLInputElement>(null);
   const [galleryPick, setGalleryPick] = useState<File | null>(null);
@@ -177,6 +181,14 @@ function ProfileView() {
           ) : null}
         </CardContent>
       </Card>
+
+      <PostsCard
+        initial={posts}
+        userId={userId}
+        isOwner={profile.isOwner}
+        currentUserId={currentUser.id}
+        isAdmin={currentUser.role === "admin"}
+      />
 
       <FamilyCard
         relationships={relationships}
@@ -633,6 +645,85 @@ function FamilyCard({
           <p className="text-muted-foreground">
             {isOwner ? "No family connections yet." : "No family connections yet."}
           </p>
+        ) : null}
+      </CardContent>
+    </Card>
+  );
+}
+
+/**
+ * FR-PRO-06: main-feed posts only (not group/business board posts) - same reasoning as
+ * GroupsCard's FR-GRP-11 comment below: a profile must never surface activity that bypasses a
+ * board's own membership/visibility gate.
+ */
+function PostsCard({
+  initial,
+  userId,
+  isOwner,
+  currentUserId,
+  isAdmin,
+}: {
+  initial: { items: FeedPostData[]; nextCursor: string | null };
+  userId: string;
+  isOwner: boolean;
+  currentUserId: string;
+  isAdmin: boolean;
+}) {
+  const doGetPosts = useServerFn(getPostsByAuthor);
+  const [items, setItems] = useState<FeedPostData[]>(initial.items);
+  const [nextCursor, setNextCursor] = useState(initial.nextCursor);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  async function refreshFromTop() {
+    const page = await doGetPosts({ data: { userId, limit: 20 } });
+    setItems(page.items);
+    setNextCursor(page.nextCursor);
+  }
+
+  async function loadMore() {
+    if (!nextCursor) return;
+    setLoadingMore(true);
+    try {
+      const page = await doGetPosts({ data: { userId, cursor: nextCursor, limit: 20 } });
+      setItems((previous) => [...previous, ...page.items]);
+      setNextCursor(page.nextCursor);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Posts</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            {isOwner ? "You haven't posted yet." : "Hasn't posted yet."}
+          </p>
+        ) : (
+          items.map((post) => (
+            <PostCard
+              key={post.id}
+              post={post}
+              currentUserId={currentUserId}
+              isAdmin={isAdmin}
+              onChanged={refreshFromTop}
+            />
+          ))
+        )}
+        {nextCursor ? (
+          <Button
+            type="button"
+            variant="outline"
+            disabled={loadingMore}
+            onClick={() => {
+              void loadMore();
+            }}
+          >
+            {loadingMore ? "Loading..." : "Load more"}
+          </Button>
         ) : null}
       </CardContent>
     </Card>

@@ -379,6 +379,66 @@ export async function listBusinessPosts(
   };
 }
 
+export interface ListPostsByAuthorInput {
+  authorId: string;
+  cursor?: string | undefined;
+  limit: number;
+  viewerId: string;
+}
+
+/**
+ * FR-PRO-06: a member's own profile Posts section - main-feed posts only, same scope reasoning
+ * as FR-GRP-11's listGroupsForUser (never surface group/business board activity through a page
+ * that bypasses that board's own membership/visibility gate).
+ */
+export async function listPostsByAuthor(
+  database: Database,
+  { authorId, cursor, limit, viewerId }: ListPostsByAuthorInput,
+): Promise<FeedPage> {
+  const conditions = [
+    eq(posts.contextType, "feed"),
+    isNull(posts.contextId),
+    eq(posts.authorId, authorId),
+    isNull(posts.deletedAt),
+  ];
+  if (cursor) conditions.push(lt(posts.createdAt, new Date(cursor)));
+  const blockedIds = await getBlockedUserIdSet(database, viewerId);
+  if (blockedIds.size > 0) conditions.push(notInArray(posts.authorId, [...blockedIds]));
+
+  const rows = await database
+    .select({
+      id: posts.id,
+      body: posts.body,
+      category: posts.category,
+      pinnedAt: posts.pinnedAt,
+      createdAt: posts.createdAt,
+      editedAt: posts.editedAt,
+      authorId: posts.authorId,
+      authorDisplayName: users.displayName,
+      authorAvatarKey: users.avatarKey,
+    })
+    .from(posts)
+    .innerJoin(users, eq(posts.authorId, users.id))
+    .where(and(...conditions))
+    .orderBy(desc(posts.createdAt))
+    .limit(limit + 1);
+
+  const hasMore = rows.length > limit;
+  const page = hasMore ? rows.slice(0, limit) : rows;
+  const postIds = page.map((row) => row.id);
+  const [mediaMap, { counts, mine }, commentCountMap] = await Promise.all([
+    attachMedia(database, page),
+    attachReactions(database, postIds, viewerId),
+    countCommentsForPosts(database, postIds),
+  ]);
+  const lastRow = page[page.length - 1];
+
+  return {
+    items: page.map((row) => toFeedPost(row, mediaMap, counts, mine, commentCountMap)),
+    nextCursor: hasMore && lastRow ? lastRow.createdAt.toISOString() : null,
+  };
+}
+
 /** FR-FEED-07: at most 3, newest-pinned first. Fetched fresh every time, not paginated. */
 export async function listPinnedPosts(database: Database, viewerId: string): Promise<FeedPost[]> {
   const blockedIds = await getBlockedUserIdSet(database, viewerId);

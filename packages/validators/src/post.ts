@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { cursorPaginationSchema, uuidSchema } from "./common";
+
 /** FR-FEED-06: optional, fixed set per the PRD. */
 export const postCategories = ["general", "lost_found", "safety", "recommendations"] as const;
 export type PostCategory = (typeof postCategories)[number];
@@ -23,3 +25,7 @@ export const updatePostSchema = z.object({
   category: postCategorySchema.optional(),
 });
 export type UpdatePostInput = z.infer<typeof updatePostSchema>;
+
+/** FR-PRO-06: a member's own profile Posts section. */
+export const listPostsByAuthorSchema = cursorPaginationSchema.extend({ userId: uuidSchema });
+export type ListPostsByAuthorInput = z.infer<typeof listPostsByAuthorSchema>;

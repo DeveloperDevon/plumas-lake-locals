@@ -3,11 +3,17 @@ import {
   deletePost,
   listFeedPosts,
   listPinnedPosts,
+  listPostsByAuthor,
   pinPost,
   unpinPost,
   updatePost,
 } from "@plumas/auth";
-import { createPostSchema, cursorPaginationSchema, updatePostSchema } from "@plumas/validators";
+import {
+  createPostSchema,
+  cursorPaginationSchema,
+  listPostsByAuthorSchema,
+  updatePostSchema,
+} from "@plumas/validators";
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 
@@ -24,6 +30,18 @@ export const getFeed = createServerFn({ method: "GET" })
       data.cursor ? Promise.resolve([]) : listPinnedPosts(db, user.id),
     ]);
     return { ...page, pinned };
+  });
+
+export const getPostsByAuthor = createServerFn({ method: "GET" })
+  .validator(listPostsByAuthorSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    return listPostsByAuthor(getDb(), {
+      authorId: data.userId,
+      cursor: data.cursor,
+      limit: data.limit,
+      viewerId: user.id,
+    });
   });
 
 export const createPostFn = createServerFn({ method: "POST" })
