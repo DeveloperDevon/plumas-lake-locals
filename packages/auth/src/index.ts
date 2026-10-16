@@ -1,3 +1,4 @@
+export * from "./account-deletion-service";
 export * from "./block-service";
 export * from "./business-service";
 export * from "./comment-service";

@@ -4,8 +4,11 @@ import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
 
 import { exportAllConversations } from "../../../lib/dm-client";
+import { deleteOwnAccountFn } from "../../../server/functions/account-deletion";
 import { exportAccountDataFn } from "../../../server/functions/export";
 import { getHasPassword, setPassword, signOut } from "../../../server/functions/session";
+
+const DELETE_CONFIRMATION_TEXT = "DELETE";
 
 /** Only file-download mechanism in this client (confirmed none existed before this feature) -
  * kept local here since both buttons below are its only two call sites. */
@@ -31,6 +34,7 @@ function Account() {
   const doSignOut = useServerFn(signOut);
   const doSetPassword = useServerFn(setPassword);
   const doExportAccountData = useServerFn(exportAccountDataFn);
+  const doDeleteOwnAccount = useServerFn(deleteOwnAccountFn);
 
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -44,6 +48,10 @@ function Account() {
     total: number;
   } | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   async function handleExportAccountData() {
     setExportingAccount(true);
@@ -81,6 +89,19 @@ function Account() {
 
   async function refresh() {
     await router.invalidate();
+  }
+
+  async function handleDeleteAccount() {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await doDeleteOwnAccount();
+      await doSignOut();
+      await router.navigate({ to: "/sign-in" });
+    } catch (error) {
+      setDeleteError(error instanceof Error ? error.message : "Couldn't delete your account.");
+      setDeleting(false);
+    }
   }
 
   return (
@@ -201,6 +222,38 @@ function Account() {
             }}
           >
             Sign out
+          </Button>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Delete my account</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-col gap-3">
+          <p className="text-sm text-muted-foreground">
+            This permanently closes your account. Your posts and comments are removed; groups or
+            business pages you own are handed to another member if one exists. This can&apos;t be
+            undone - download your data first if you want to keep a copy.
+          </p>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="delete-confirmation">Type {DELETE_CONFIRMATION_TEXT} to confirm</Label>
+            <Input
+              id="delete-confirmation"
+              value={deleteConfirmation}
+              onChange={(event) => {
+                setDeleteConfirmation(event.target.value);
+              }}
+            />
+          </div>
+          {deleteError ? <p className="text-sm text-destructive">{deleteError}</p> : null}
+          <Button
+            variant="destructive"
+            className="w-fit"
+            disabled={deleting || deleteConfirmation !== DELETE_CONFIRMATION_TEXT}
+            onClick={() => void handleDeleteAccount()}
+          >
+            {deleting ? "Deleting..." : "Delete my account"}
           </Button>
         </CardContent>
       </Card>

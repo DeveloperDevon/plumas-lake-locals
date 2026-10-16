@@ -1,6 +1,8 @@
 import { type Database, schema } from "@plumas/db";
 import type { AdminDeleteTargetType, ReportReason, ReportTargetType } from "@plumas/validators";
-import { desc, eq, inArray, isNull } from "drizzle-orm";
+import { desc, eq, inArray, isNull, ne } from "drizzle-orm";
+
+import { GHOST_USER_EMAIL } from "./account-deletion-service";
 
 const { auditLog, businesses, comments, events, listings, posts, reports, users } = schema;
 
@@ -291,7 +293,14 @@ export async function listMembersForAdmin(
 ): Promise<MemberView[]> {
   await requireAdmin(database, viewerId);
 
-  const rows = await database.select().from(users).orderBy(desc(users.createdAt));
+  // Excludes the account-deletion ghost sentinel (account-deletion-service.ts) - without this
+  // it would appear here indistinguishable from a real suspended member, and could technically
+  // be "Unsuspended," which would break the search-exclusion invariant that design relies on.
+  const rows = await database
+    .select()
+    .from(users)
+    .where(ne(users.email, GHOST_USER_EMAIL))
+    .orderBy(desc(users.createdAt));
   const inviterIds = rows.map((row) => row.invitedBy).filter((id): id is string => id !== null);
   const inviters =
     inviterIds.length > 0
