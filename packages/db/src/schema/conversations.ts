@@ -58,6 +58,10 @@ export const conversationParticipants = pgTable(
     status: participantStatusEnum("status").notNull().default("active"),
     lastReadMessageId: uuid("last_read_message_id"),
     muted: boolean("muted").notNull().default(false),
+    // FR-DM-16: this participant deleted the conversation from their own inbox. Cleared again
+    // the next time the other side sends a message (see dm-service.ts's sendMessage) - a
+    // UX default, not a PRD mandate, matching how most chat apps treat "delete conversation".
+    hiddenAt: timestamp("hidden_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [primaryKey({ columns: [t.conversationId, t.userId] })],

@@ -21,7 +21,12 @@ interface NavItem {
   badge?: number;
 }
 
-function navItems(userId: string, isAdmin: boolean, unreadCount: number): NavItem[] {
+function navItems(
+  userId: string,
+  isAdmin: boolean,
+  unreadCount: number,
+  unreadMessageCount: number,
+): NavItem[] {
   const items: NavItem[] = [
     { to: "/feed", label: "Feed", icon: Newspaper },
     { to: "/search", label: "Search", icon: Search },
@@ -29,7 +34,7 @@ function navItems(userId: string, isAdmin: boolean, unreadCount: number): NavIte
     { to: "/businesses", label: "Businesses", icon: Store },
     { to: "/calendar", label: "Calendar", icon: CalendarDays },
     { to: "/marketplace", label: "Marketplace", icon: ShoppingBag },
-    { to: "/messages", label: "Messages", icon: MessageCircle },
+    { to: "/messages", label: "Messages", icon: MessageCircle, badge: unreadMessageCount },
     { to: "/notifications", label: "Notifications", icon: Bell, badge: unreadCount },
     { to: `/profile/${userId}`, label: "Profile", icon: CircleUserRound },
     { to: "/settings", label: "Settings", icon: SettingsIcon },
@@ -52,15 +57,17 @@ export function NavRail({
   userId,
   isAdmin,
   unreadCount,
+  unreadMessageCount,
 }: {
   userId: string;
   isAdmin: boolean;
   unreadCount: number;
+  unreadMessageCount: number;
 }) {
   return (
     <nav className="hidden w-56 shrink-0 flex-col gap-1 border-r border-border bg-card p-4 lg:flex">
       <p className="mb-4 px-3 text-sm font-semibold text-foreground">Plumas Lake Locals</p>
-      {navItems(userId, isAdmin, unreadCount).map((item) => (
+      {navItems(userId, isAdmin, unreadCount, unreadMessageCount).map((item) => (
         <Link
           key={item.to}
           to={item.to}
@@ -86,17 +93,19 @@ export function TabBar({
   userId,
   isAdmin,
   unreadCount,
+  unreadMessageCount,
 }: {
   userId: string;
   isAdmin: boolean;
   unreadCount: number;
+  unreadMessageCount: number;
 }) {
   return (
     <nav
       className="fixed inset-x-0 bottom-0 flex border-t border-border bg-card lg:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
     >
-      {navItems(userId, isAdmin, unreadCount).map((item) => (
+      {navItems(userId, isAdmin, unreadCount, unreadMessageCount).map((item) => (
         <Link
           key={item.to}
           to={item.to}

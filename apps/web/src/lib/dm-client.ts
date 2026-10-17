@@ -14,6 +14,8 @@ import {
   getMessagesFn,
   getMyConversationsFn,
   getPendingDeparturesFn,
+  hideConversationFn,
+  markConversationReadFn,
   publishKeyPackagesFn,
   recordDeviceLinkFn,
   registerDeviceFn,
@@ -23,6 +25,7 @@ import {
   sendMessageFn,
   startDirectConversationFn,
   startGroupConversationFn,
+  unsendMessageFn,
 } from "../server/functions/dm";
 
 const KEY_PACKAGE_POOL_SIZE = 5;
@@ -159,6 +162,9 @@ export interface DecryptedMessage {
   mine: boolean;
   senderDisplayName: string;
   plaintext: string | null;
+  // FR-DM-16: ciphertext was deleted server-side - render an "unsent" placeholder instead of
+  // attempting to decrypt.
+  unsentAt: Date | null;
   createdAt: Date;
 }
 
@@ -166,9 +172,10 @@ export interface DecryptedMessage {
  * Decrypts a page of message rows (already fetched via getMessagesFn) into display-ready text.
  * Rows this device authored are read back from the local sent-plaintext cache, never
  * re-decrypted (MLS doesn't support a sender decrypting its own past ciphertext - see
- * storage.ts's StoredSentPlaintext doc comment). `plaintext: null` means a commit/welcome row
- * (device-join bookkeeping) with nothing to display. `senderDisplayName` is only meaningful for
- * group threads - a 1:1 thread already knows who "theirs" is from the conversation summary.
+ * storage.ts's StoredSentPlaintext doc comment). `plaintext: null` (with `unsentAt: null`) means
+ * a commit/welcome row (device-join bookkeeping) with nothing to display. `senderDisplayName` is
+ * only meaningful for group threads - a 1:1 thread already knows who "theirs" is from the
+ * conversation summary.
  */
 export async function decryptMessages(
   conversationId: string,
@@ -176,7 +183,8 @@ export async function decryptMessages(
     id: string;
     senderDeviceId: string;
     senderDisplayName: string;
-    ciphertext: string;
+    ciphertext: string | null;
+    unsentAt: Date | null;
     createdAt: Date;
   }[],
 ): Promise<DecryptedMessage[]> {
@@ -186,6 +194,17 @@ export async function decryptMessages(
   const results: DecryptedMessage[] = [];
   for (const row of rows) {
     const mine = row.senderDeviceId === myDeviceId;
+    if (row.ciphertext === null) {
+      results.push({
+        id: row.id,
+        mine,
+        senderDisplayName: row.senderDisplayName,
+        plaintext: null,
+        unsentAt: row.unsentAt,
+        createdAt: row.createdAt,
+      });
+      continue;
+    }
     if (mine) {
       const cached = await client.getCachedSentPlaintext(row.id);
       results.push({
@@ -193,6 +212,7 @@ export async function decryptMessages(
         mine,
         senderDisplayName: row.senderDisplayName,
         plaintext: cached ?? null,
+        unsentAt: null,
         createdAt: row.createdAt,
       });
       continue;
@@ -203,10 +223,29 @@ export async function decryptMessages(
       mine,
       senderDisplayName: row.senderDisplayName,
       plaintext: result.kind === "applicationMessage" ? result.plaintext : null,
+      unsentAt: null,
       createdAt: row.createdAt,
     });
   }
   return results;
+}
+
+/** FR-DM-04: advances this device's read cursor past the furthest message it just fetched. */
+export async function markConversationRead(
+  conversationId: string,
+  messageId: string,
+): Promise<void> {
+  await markConversationReadFn({ data: { conversationId, messageId } });
+}
+
+/** FR-DM-16: deletes this message's ciphertext server-side, within the 15-minute window. */
+export async function unsendMessage(messageId: string): Promise<void> {
+  await unsendMessageFn({ data: { messageId } });
+}
+
+/** FR-DM-16: deletes the conversation from this user's own inbox only. */
+export async function hideConversation(conversationId: string): Promise<void> {
+  await hideConversationFn({ data: { conversationId } });
 }
 
 export interface ExportedConversation {
@@ -324,6 +363,7 @@ export async function startGroupConversation(
   myUserId: string,
   name: string,
   memberUserIds: string[],
+  businessId?: string,
 ): Promise<string> {
   const client = getDmClient();
   const creatorDeviceId = await requireDeviceId();
@@ -351,6 +391,7 @@ export async function startGroupConversation(
         // Non-null: claimed has exactly one entry per memberUserIds entry, same order.
         deviceId: claimed[index]?.deviceId ?? "",
       })),
+      businessId,
     },
   });
   return response.conversationId;

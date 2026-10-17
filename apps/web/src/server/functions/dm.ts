@@ -1,16 +1,21 @@
 import {
   addGroupMember,
   claimKeyPackageForUser,
+  countUnreadForUser,
   createDirectConversation,
   createGroupConversation,
   DmNoKeyPackageError,
+  findBusinessConversationForUser,
   getBackup,
   getConversationSummary,
+  hideConversationForUser,
   listConversationSummariesForUser,
   listDevicesForUser,
   listGroupMembers,
+  listManagers,
   listMessages,
   listPendingDepartures,
+  markConversationRead,
   publishKeyPackages,
   recordDeviceLinkOperations,
   registerDevice,
@@ -18,6 +23,7 @@ import {
   requestToLeaveGroup,
   searchMembers,
   sendMessage,
+  unsendMessage,
   upsertBackup,
 } from "@plumas/auth";
 import {
@@ -25,6 +31,7 @@ import {
   addGroupMemberSchema,
   createBackupSchema,
   listMessagesSchema,
+  markConversationReadSchema,
   publishKeyPackagesSchema,
   registerDeviceSchema,
   removeGroupMemberSchema,
@@ -142,7 +149,8 @@ export const getMessagesFn = createServerFn({ method: "GET" })
       senderUserId: row.senderUserId,
       senderDisplayName: row.senderDisplayName,
       epoch: row.epoch,
-      ciphertext: row.ciphertext.toString("base64"),
+      ciphertext: row.ciphertext ? row.ciphertext.toString("base64") : null,
+      unsentAt: row.unsentAt,
       createdAt: row.createdAt,
     }));
   });
@@ -216,8 +224,56 @@ export const startGroupConversationFn = createServerFn({ method: "POST" })
       memberUserIds: data.members.map((member) => member.userId),
       epoch: data.epoch,
       welcomeBytes: Buffer.from(data.welcomeBytes, "base64"),
+      businessId: data.businessId,
     });
     return { conversationId: conversation.id };
+  });
+
+/** FR-DM-15: finds this user's existing conversation with a business, or its managers to start one. */
+export const getBusinessMessagingTargetFn = createServerFn({ method: "GET" })
+  .validator(z.object({ businessId: z.string().uuid() }))
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    const db = getDb();
+    const existing = await findBusinessConversationForUser(db, data.businessId, user.id);
+    if (existing) {
+      return { existingConversationId: existing.id, managers: [] as { userId: string }[] };
+    }
+
+    const managers = await listManagers(db, data.businessId);
+    return {
+      existingConversationId: null,
+      managers: managers.map((manager) => ({ userId: manager.userId })),
+    };
+  });
+
+export const markConversationReadFn = createServerFn({ method: "POST" })
+  .validator(markConversationReadSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    await markConversationRead(getDb(), data.conversationId, user.id, data.messageId);
+    return { ok: true as const };
+  });
+
+export const getUnreadMessageCountsFn = createServerFn({ method: "GET" }).handler(async () => {
+  const user = await requireUser();
+  return countUnreadForUser(getDb(), user.id);
+});
+
+export const unsendMessageFn = createServerFn({ method: "POST" })
+  .validator(z.object({ messageId: z.string().uuid() }))
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    await unsendMessage(getDb(), data.messageId, user.id);
+    return { ok: true as const };
+  });
+
+export const hideConversationFn = createServerFn({ method: "POST" })
+  .validator(z.object({ conversationId: z.string().uuid() }))
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    await hideConversationForUser(getDb(), data.conversationId, user.id);
+    return { ok: true as const };
   });
 
 export const addGroupMemberFn = createServerFn({ method: "POST" })

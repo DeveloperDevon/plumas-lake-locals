@@ -1,11 +1,13 @@
 import { createDb, schema } from "@plumas/db";
 import { describe, expect, it } from "vitest";
 
+import { createBusiness } from "./business-service";
 import {
   addGroupMember,
   createGroupConversation,
   DmGroupPermissionError,
   DmGroupSizeError,
+  findBusinessConversationForUser,
   getConversationSummary,
   listConversationSummariesForUser,
   listMessages,
@@ -198,7 +200,7 @@ describe("dm-service groups (integration, against the real local Postgres)", () 
       userId: bob.id,
       limit: 10,
     });
-    const sentRow = history.find((row) => row.ciphertext.equals(ciphertext));
+    const sentRow = history.find((row) => row.ciphertext?.equals(ciphertext));
     expect(sentRow?.senderUserId).toBe(bob.id);
     expect(sentRow?.senderDisplayName).toBe("Test bob-group");
   });
@@ -222,5 +224,37 @@ describe("dm-service groups (integration, against the real local Postgres)", () 
     expect(ids).toContain(findable.id);
     expect(ids).not.toContain(suspended.id);
     expect(ids).not.toContain(searcher.id);
+  });
+
+  it("tags a group conversation with its businessId, findable and reused on a second lookup (FR-DM-15)", async () => {
+    const customer = await makeMember("customer-biz-dm");
+    const owner = await makeMember("owner-biz-dm");
+    const customerDevice = await makeDeviceWithKeyPackage(customer.id);
+    await makeDeviceWithKeyPackage(owner.id);
+    const business = await createBusiness(db, {
+      ownerId: owner.id,
+      name: "Lopez Landscaping",
+      serviceArea: "Plumas Lake",
+    });
+
+    expect(await findBusinessConversationForUser(db, business.id, customer.id)).toBeNull();
+
+    const conversation = await createGroupConversation(db, {
+      conversationId: crypto.randomUUID(),
+      creatorId: customer.id,
+      creatorDeviceId: customerDevice.id,
+      name: business.name,
+      memberUserIds: [owner.id],
+      epoch: 1,
+      welcomeBytes: Buffer.from("welcome"),
+      businessId: business.id,
+    });
+
+    const found = await findBusinessConversationForUser(db, business.id, customer.id);
+    expect(found?.id).toBe(conversation.id);
+    // Not a participant in this business's thread - no match for someone else.
+    expect(await findBusinessConversationForUser(db, business.id, owner.id)).not.toBeNull();
+    const stranger = await makeMember("stranger-biz-dm");
+    expect(await findBusinessConversationForUser(db, business.id, stranger.id)).toBeNull();
   });
 });

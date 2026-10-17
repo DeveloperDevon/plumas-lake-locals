@@ -1,5 +1,5 @@
 import { type Database, schema } from "@plumas/db";
-import { and, asc, desc, eq, gt, inArray, isNull, ne, notInArray, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gt, inArray, isNull, lt, ne, notInArray, or, sql } from "drizzle-orm";
 import { uuidv7 } from "uuidv7";
 
 import { getBlockedUserIdSet, isBlockedEitherWay } from "./block-service";
@@ -50,6 +50,59 @@ export class DmGroupSizeError extends Error {
 export class DmGroupPermissionError extends Error {
   constructor(message = "Only the group's creator can do that.") {
     super(message);
+  }
+}
+
+const MAX_NEW_CONVERSATIONS_PER_DAY = 20;
+const MAX_MESSAGES_PER_MINUTE = 60;
+
+/** FR-DM-10. */
+export class DmConversationRateLimitError extends Error {
+  constructor(message = `You've started too many new conversations today - try again tomorrow.`) {
+    super(message);
+  }
+}
+
+/** FR-DM-10. */
+export class DmMessageRateLimitError extends Error {
+  constructor(message = "You're sending messages too fast - slow down a bit.") {
+    super(message);
+  }
+}
+
+/** FR-DM-10: 20 new conversations/day, counting both direct and group creation by this user. */
+async function assertUnderConversationRateLimit(database: Database, userId: string) {
+  const [row] = await database.execute<{ count: string }>(sql`
+    select count(*)::int as count
+    from conversations
+    where created_at > now() - interval '24 hours'
+      and (
+        (kind = 'direct' and (direct_user_a = ${userId} or direct_user_b = ${userId}))
+        or (kind = 'group' and creator_id = ${userId})
+      )
+  `);
+  if (Number(row?.count ?? 0) >= MAX_NEW_CONVERSATIONS_PER_DAY) {
+    throw new DmConversationRateLimitError();
+  }
+}
+
+/**
+ * FR-DM-10: 60 messages/minute, across all of this user's devices. Counts every `messages` row,
+ * including MLS Welcome/Commit housekeeping rows (starting a conversation, adding/removing a
+ * group member) - the server can't distinguish those from a real chat message any more than
+ * countUnreadForUser can (see its doc comment), so a burst of conversation/group activity can
+ * eat into this budget a little. Same accepted tradeoff, applied consistently.
+ */
+async function assertUnderMessageRateLimit(database: Database, senderUserId: string) {
+  const [row] = await database.execute<{ count: string }>(sql`
+    select count(*)::int as count
+    from messages m
+    join devices d on d.id = m.sender_device_id
+    where d.user_id = ${senderUserId}
+      and m.created_at > now() - interval '1 minute'
+  `);
+  if (Number(row?.count ?? 0) >= MAX_MESSAGES_PER_MINUTE) {
+    throw new DmMessageRateLimitError();
   }
 }
 
@@ -194,6 +247,25 @@ export async function createDirectConversation(
   }
   const [userA, userB] = sortedPair(input.requesterId, input.otherUserId);
 
+  // The UI calls this every time "Message" is clicked, even for a pair that already has a
+  // conversation (relying on the catch-unique-violation fallback below) - so re-opening an old
+  // thread must never spend FR-DM-10's daily budget. Only a pair with no row yet reaches the
+  // rate-limit check and the insert; the uniqueness guarantee itself still comes from the index
+  // and the catch block, not from this lookup (same race-safety reasoning as the doc comment).
+  const [alreadyExists] = await database
+    .select()
+    .from(conversations)
+    .where(
+      and(
+        eq(conversations.kind, "direct"),
+        eq(conversations.directUserA, userA),
+        eq(conversations.directUserB, userB),
+      ),
+    );
+  if (alreadyExists) return alreadyExists;
+
+  await assertUnderConversationRateLimit(database, input.requesterId);
+
   try {
     const [conversation] = await database
       .insert(conversations)
@@ -249,6 +321,9 @@ export interface CreateGroupConversationInput {
   memberUserIds: string[];
   epoch: number;
   welcomeBytes: Buffer;
+  // FR-DM-15: tags this group as a business's own conversation with its managers, so
+  // findBusinessConversationForUser can find and reuse it on a later "message this business".
+  businessId?: string | undefined;
 }
 
 /**
@@ -272,6 +347,7 @@ export async function createGroupConversation(
   if (1 + input.memberUserIds.length > MAX_GROUP_MEMBERS) {
     throw new DmGroupSizeError();
   }
+  await assertUnderConversationRateLimit(database, input.creatorId);
 
   const [conversation] = await database
     .insert(conversations)
@@ -280,6 +356,7 @@ export async function createGroupConversation(
       kind: "group",
       name: input.name,
       creatorId: input.creatorId,
+      businessId: input.businessId ?? null,
       epoch: input.epoch,
       lastMessageAt: new Date(),
     })
@@ -304,6 +381,34 @@ export async function createGroupConversation(
   });
 
   return conversation;
+}
+
+/**
+ * FR-DM-15: finds this user's existing "message this business" group conversation, if any, so
+ * repeat clicks on "Message this business" reuse the one thread instead of creating a new group
+ * every time.
+ */
+export async function findBusinessConversationForUser(
+  database: Database,
+  businessId: string,
+  userId: string,
+) {
+  const [row] = await database
+    .select({ conversation: conversations })
+    .from(conversations)
+    .innerJoin(
+      conversationParticipants,
+      eq(conversationParticipants.conversationId, conversations.id),
+    )
+    .where(
+      and(
+        eq(conversations.kind, "group"),
+        eq(conversations.businessId, businessId),
+        eq(conversationParticipants.userId, userId),
+        eq(conversationParticipants.status, "active"),
+      ),
+    );
+  return row?.conversation ?? null;
 }
 
 async function requireGroupCreator(database: Database, conversationId: string, userId: string) {
@@ -572,6 +677,8 @@ export async function sendMessage(database: Database, input: SendMessageInput) {
     }
   }
 
+  await assertUnderMessageRateLimit(database, input.senderUserId);
+
   const [row] = await database
     .insert(messages)
     .values({
@@ -588,6 +695,17 @@ export async function sendMessage(database: Database, input: SendMessageInput) {
     .update(conversations)
     .set({ lastMessageAt: new Date() })
     .where(eq(conversations.id, input.conversationId));
+
+  // FR-DM-16: a new message revives the thread for anyone who'd hidden it from their own inbox.
+  await database
+    .update(conversationParticipants)
+    .set({ hiddenAt: null })
+    .where(
+      and(
+        eq(conversationParticipants.conversationId, input.conversationId),
+        ne(conversationParticipants.userId, input.senderUserId),
+      ),
+    );
 
   await notifyOtherParticipants(database, input.conversationId, input.senderUserId, "dm_message");
 
@@ -633,14 +751,92 @@ async function notifyOtherParticipants(
   }
 }
 
-/** FR-DM-02: inbox, most recently active conversation first. */
+const UNSEND_WINDOW_MINUTES = 15;
+
+/** FR-DM-16. */
+export class DmUnsendWindowExpiredError extends Error {
+  constructor(
+    message = `You can only unsend a message within ${String(UNSEND_WINDOW_MINUTES)} minutes of sending it.`,
+  ) {
+    super(message);
+  }
+}
+
+/**
+ * FR-DM-16: deletes a message's ciphertext server-side (not just a client-side hide) within 15
+ * minutes of sending. Only the sender - checked via device ownership, the same shape as
+ * `requireOwnedDevice` - can unsend their own message.
+ */
+export async function unsendMessage(database: Database, messageId: string, userId: string) {
+  const [row] = await database
+    .select({
+      id: messages.id,
+      createdAt: messages.createdAt,
+      senderUserId: devices.userId,
+      unsentAt: messages.unsentAt,
+    })
+    .from(messages)
+    .innerJoin(devices, eq(devices.id, messages.senderDeviceId))
+    .where(eq(messages.id, messageId));
+  if (!row) throw new DmNotFoundError("That message no longer exists.");
+  if (row.senderUserId !== userId) {
+    throw new DmForbiddenError("You can only unsend your own messages.");
+  }
+  if (row.unsentAt) return;
+  const ageMs = Date.now() - row.createdAt.getTime();
+  if (ageMs > UNSEND_WINDOW_MINUTES * 60 * 1000) throw new DmUnsendWindowExpiredError();
+
+  await database
+    .update(messages)
+    .set({ unsentAt: new Date(), ciphertext: null })
+    .where(eq(messages.id, messageId));
+}
+
+/** FR-DM-16: deletes a conversation from this participant's own inbox only. */
+export async function hideConversationForUser(
+  database: Database,
+  conversationId: string,
+  userId: string,
+) {
+  await requireActiveParticipant(database, conversationId, userId);
+  await database
+    .update(conversationParticipants)
+    .set({ hiddenAt: new Date() })
+    .where(
+      and(
+        eq(conversationParticipants.conversationId, conversationId),
+        eq(conversationParticipants.userId, userId),
+      ),
+    );
+}
+
+/**
+ * FR-DM-02: inbox, most recently active conversation first. FR-DM-07: a direct conversation with
+ * a now-blocked member is excluded, either direction - group conversations are left alone, same
+ * reasoning as sendMessage's own block check (shared membership isn't retroactively hidden by a
+ * block between two of its members). FR-DM-16: a conversation this user hid is excluded too,
+ * until it's revived by a new inbound message (see sendMessage).
+ */
 export async function listConversationsForUser(database: Database, userId: string) {
-  return database
+  const blockedIds = await getBlockedUserIdSet(database, userId);
+  const rows = await database
     .select({ conversation: conversations, participant: conversationParticipants })
     .from(conversationParticipants)
     .innerJoin(conversations, eq(conversations.id, conversationParticipants.conversationId))
-    .where(eq(conversationParticipants.userId, userId))
+    .where(
+      and(eq(conversationParticipants.userId, userId), isNull(conversationParticipants.hiddenAt)),
+    )
     .orderBy(desc(conversations.lastMessageAt));
+
+  if (blockedIds.size === 0) return rows;
+  return rows.filter((row) => {
+    if (row.conversation.kind !== "direct") return true;
+    const otherId =
+      row.conversation.directUserA === userId
+        ? row.conversation.directUserB
+        : row.conversation.directUserA;
+    return otherId === null || !blockedIds.has(otherId);
+  });
 }
 
 export interface ConversationSummary {
@@ -823,6 +1019,7 @@ export async function listMessages(database: Database, input: ListMessagesInput)
       senderDisplayName: users.displayName,
       epoch: messages.epoch,
       ciphertext: messages.ciphertext,
+      unsentAt: messages.unsentAt,
       createdAt: messages.createdAt,
     })
     .from(messages)
@@ -831,6 +1028,72 @@ export async function listMessages(database: Database, input: ListMessagesInput)
     .where(and(...conditions))
     .orderBy(asc(messages.id))
     .limit(input.limit);
+}
+
+/**
+ * FR-DM-04: advances this participant's read cursor, never backward. Intentionally takes the id
+ * of the furthest message the client *fetched* (not just the furthest one with visible content)
+ * - messages.id is a UUIDv7, so plain comparison already sorts chronologically, the same
+ * assumption listMessages's own cursor pagination relies on. See countUnreadForUser's doc
+ * comment for why "furthest fetched" (not "furthest visible") is the right cursor to store.
+ */
+export async function markConversationRead(
+  database: Database,
+  conversationId: string,
+  userId: string,
+  messageId: string,
+) {
+  await database
+    .update(conversationParticipants)
+    .set({ lastReadMessageId: messageId })
+    .where(
+      and(
+        eq(conversationParticipants.conversationId, conversationId),
+        eq(conversationParticipants.userId, userId),
+        or(
+          isNull(conversationParticipants.lastReadMessageId),
+          lt(conversationParticipants.lastReadMessageId, messageId),
+        ),
+      ),
+    );
+}
+
+export interface UnreadCounts {
+  total: number;
+  byConversation: Record<string, number>;
+}
+
+/**
+ * FR-DM-04: unread counts per conversation, plus the total for the nav badge.
+ * Known, accepted imprecision: the server stores MLS ciphertext only (FR-DM-09) and can't tell a
+ * real chat message from a Welcome/Commit housekeeping row - only client-side decryption can
+ * (see @plumas/crypto's ProcessIncomingResult). So a rare event like someone else linking a
+ * device, or a group membership change, can bump this count with nothing new to actually read.
+ * This self-corrects the next time the thread is opened, since markConversationRead is called
+ * with the furthest *fetched* message id, not just the furthest visible one.
+ */
+export async function countUnreadForUser(
+  database: Database,
+  userId: string,
+): Promise<UnreadCounts> {
+  const rows = await database.execute<{ conversation_id: string; count: string }>(sql`
+    select cp.conversation_id, count(m.id)::int as count
+    from conversation_participants cp
+    join messages m on m.conversation_id = cp.conversation_id
+    where cp.user_id = ${userId}
+      and cp.hidden_at is null
+      and (cp.last_read_message_id is null or m.id > cp.last_read_message_id)
+    group by cp.conversation_id
+  `);
+
+  const byConversation: Record<string, number> = {};
+  let total = 0;
+  for (const row of rows) {
+    const count = Number(row.count);
+    byConversation[row.conversation_id] = count;
+    total += count;
+  }
+  return { total, byConversation };
 }
 
 export interface RecordDeviceLinkOperation {

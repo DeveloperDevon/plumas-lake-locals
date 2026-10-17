@@ -9,9 +9,11 @@ import {
   decryptMessages,
   finalizePendingDepartures,
   leaveGroup,
+  markConversationRead,
   removeMemberFromGroup,
   searchMembers,
   sendDmMessage,
+  unsendMessage,
 } from "../../../lib/dm-client";
 import { formatDateTime } from "../../../lib/format-date";
 import {
@@ -19,6 +21,10 @@ import {
   getGroupMembersFn,
   getMessagesFn,
 } from "../../../server/functions/dm";
+
+// FR-DM-16: mirrors dm-service.ts's UNSEND_WINDOW_MINUTES - a client-side hint only (the server
+// is the source of truth and rejects a late attempt regardless).
+const UNSEND_WINDOW_MS = 15 * 60 * 1000;
 
 export const Route = createFileRoute("/_app/messages/$conversationId")({
   loader: async ({ params }) => {
@@ -62,6 +68,13 @@ function ConversationThread() {
   const [memberResults, setMemberResults] = useState<GroupMemberRow[]>([]);
   const [memberBusyId, setMemberBusyId] = useState<string | null>(null);
   const [memberError, setMemberError] = useState<string | null>(null);
+
+  // FR-DM-04: advances the read cursor past the furthest *fetched* row, not just the furthest
+  // visible one - see dm-service.ts's countUnreadForUser doc comment for why that matters.
+  async function markReadUpTo(fetchedRows: { id: string }[]) {
+    const last = fetchedRows[fetchedRows.length - 1];
+    if (last) await markConversationRead(conversationId, last.id);
+  }
 
   async function refreshMembers() {
     const fresh = await getGroupMembersFn({ data: { conversationId } });
@@ -135,6 +148,8 @@ function ConversationThread() {
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
       if (cancelled) return;
       setMessages(decrypted);
+      const last = rows[rows.length - 1];
+      if (last) await markConversationRead(conversationId, last.id);
     })().catch((decryptError: unknown) => {
       if (cancelled) return;
       setError(
@@ -176,10 +191,23 @@ function ConversationThread() {
       const freshRows = await getMessagesFn({ data: { conversationId, limit: 100 } });
       const decrypted = await decryptMessages(conversationId, freshRows);
       setMessages(decrypted);
+      await markReadUpTo(freshRows);
     } catch (sendError) {
       setError(sendError instanceof Error ? sendError.message : "Couldn't send that message.");
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleUnsend(messageId: string) {
+    setError(null);
+    try {
+      await unsendMessage(messageId);
+      await handleRefresh();
+    } catch (unsendError) {
+      setError(
+        unsendError instanceof Error ? unsendError.message : "Couldn't unsend that message.",
+      );
     }
   }
 
@@ -189,6 +217,7 @@ function ConversationThread() {
       const freshRows = await getMessagesFn({ data: { conversationId, limit: 100 } });
       const decrypted = await decryptMessages(conversationId, freshRows);
       setMessages(decrypted);
+      await markReadUpTo(freshRows);
     } catch (refreshError) {
       setError(
         refreshError instanceof Error
@@ -317,29 +346,48 @@ function ConversationThread() {
         ) : (
           <div className="flex flex-col gap-2">
             {messages
-              .filter((message) => message.plaintext !== null)
-              .map((message) => (
-                <div
-                  key={message.id}
-                  className={`flex flex-col ${message.mine ? "items-end" : "items-start"}`}
-                >
-                  {isGroup && !message.mine ? (
-                    <span className="mb-0.5 text-xs font-medium text-muted-foreground">
-                      {message.senderDisplayName}
-                    </span>
-                  ) : null}
+              .filter((message) => message.plaintext !== null || message.unsentAt !== null)
+              .map((message) => {
+                const canUnsend =
+                  message.mine &&
+                  !message.unsentAt &&
+                  Date.now() - message.createdAt.getTime() <= UNSEND_WINDOW_MS;
+                return (
                   <div
-                    className={`max-w-xs rounded-lg px-3 py-2 text-sm ${
-                      message.mine ? "bg-primary text-primary-foreground" : "bg-muted"
-                    }`}
+                    key={message.id}
+                    className={`flex flex-col ${message.mine ? "items-end" : "items-start"}`}
                   >
-                    {message.plaintext}
+                    {isGroup && !message.mine ? (
+                      <span className="mb-0.5 text-xs font-medium text-muted-foreground">
+                        {message.senderDisplayName}
+                      </span>
+                    ) : null}
+                    <div
+                      className={`max-w-xs rounded-lg px-3 py-2 text-sm ${
+                        message.unsentAt
+                          ? "italic text-muted-foreground"
+                          : message.mine
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted"
+                      }`}
+                    >
+                      {message.unsentAt ? "Message unsent" : message.plaintext}
+                    </div>
+                    <span className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
+                      {formatDateTime(message.createdAt)}
+                      {canUnsend ? (
+                        <button
+                          type="button"
+                          className="hover:text-foreground hover:underline"
+                          onClick={() => void handleUnsend(message.id)}
+                        >
+                          Unsend
+                        </button>
+                      ) : null}
+                    </span>
                   </div>
-                  <span className="mt-1 text-xs text-muted-foreground">
-                    {formatDateTime(message.createdAt)}
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             <div ref={bottomRef} />
           </div>
         )}

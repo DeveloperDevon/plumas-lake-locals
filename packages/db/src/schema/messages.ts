@@ -18,7 +18,8 @@ export const messages = pgTable(
     epoch: integer("epoch").notNull(),
     // FR-DM-09: ciphertext only. No plaintext column, ever — enforced by code review and
     // docs/adr/0005, not a database constraint, since Postgres can't type-check "never decryptable".
-    ciphertext: bytea("ciphertext").notNull(),
+    // Nullable: FR-DM-16 unsend deletes it server-side, leaving unsentAt as the only record.
+    ciphertext: bytea("ciphertext"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     unsentAt: timestamp("unsent_at", { withTimezone: true }),
   },

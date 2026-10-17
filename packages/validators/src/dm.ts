@@ -83,6 +83,8 @@ export const startGroupConversationSchema = z.object({
     .array(z.object({ userId: uuidSchema, deviceId: uuidSchema }))
     .min(1)
     .max(49),
+  // FR-DM-15: tags this group as a business's own conversation with its managers.
+  businessId: uuidSchema.optional(),
 });
 export type StartGroupConversationInput = z.infer<typeof startGroupConversationSchema>;
 
@@ -107,3 +109,10 @@ export type RemoveGroupMemberInput = z.infer<typeof removeGroupMemberSchema>;
 
 export const searchMembersSchema = z.object({ query: z.string().trim().min(1).max(100) });
 export type SearchMembersInput = z.infer<typeof searchMembersSchema>;
+
+/** FR-DM-04. */
+export const markConversationReadSchema = z.object({
+  conversationId: uuidSchema,
+  messageId: uuidSchema,
+});
+export type MarkConversationReadInput = z.infer<typeof markConversationReadSchema>;

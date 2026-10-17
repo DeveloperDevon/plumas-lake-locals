@@ -3,6 +3,7 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useState } from "react";
 
 import { NavRail, TabBar } from "../components/nav";
+import { getUnreadMessageCountsFn } from "../server/functions/dm";
 import { getUnreadNotificationCountFn } from "../server/functions/notifications";
 
 const UNREAD_POLL_MS = 30_000;
@@ -23,37 +24,58 @@ export const Route = createFileRoute("/_app")({
     }
     return { user: context.session.user };
   },
-  loader: async () => ({ unreadCount: await getUnreadNotificationCountFn() }),
+  loader: async () => ({
+    unreadCount: await getUnreadNotificationCountFn(),
+    unreadMessageCount: (await getUnreadMessageCountsFn()).total,
+  }),
   component: AppShell,
 });
 
 function AppShell() {
   const { user } = Route.useRouteContext();
-  const { unreadCount: initialUnreadCount } = Route.useLoaderData();
+  const { unreadCount: initialUnreadCount, unreadMessageCount: initialUnreadMessageCount } =
+    Route.useLoaderData();
   const isAdmin = user.role === "admin";
 
   // No push/websocket exists yet (FR-NOT-03 push is deferred) - polling is the simplest way to
-  // keep the nav badge roughly live.
+  // keep the nav badges roughly live.
   const [unreadCount, setUnreadCount] = useState(initialUnreadCount);
+  const [unreadMessageCount, setUnreadMessageCount] = useState(initialUnreadMessageCount);
   const getUnreadCount = useServerFn(getUnreadNotificationCountFn);
+  const getUnreadMessageCounts = useServerFn(getUnreadMessageCountsFn);
   useEffect(() => {
     const interval = setInterval(() => {
       getUnreadCount()
         .then(setUnreadCount)
         .catch(() => undefined);
+      getUnreadMessageCounts()
+        .then((counts) => {
+          setUnreadMessageCount(counts.total);
+        })
+        .catch(() => undefined);
     }, UNREAD_POLL_MS);
     return () => {
       clearInterval(interval);
     };
-  }, [getUnreadCount]);
+  }, [getUnreadCount, getUnreadMessageCounts]);
 
   return (
     <div className="flex min-h-screen">
-      <NavRail userId={user.id} isAdmin={isAdmin} unreadCount={unreadCount} />
+      <NavRail
+        userId={user.id}
+        isAdmin={isAdmin}
+        unreadCount={unreadCount}
+        unreadMessageCount={unreadMessageCount}
+      />
       <div className="min-w-0 flex-1 pb-16 lg:pb-0">
         <Outlet />
       </div>
-      <TabBar userId={user.id} isAdmin={isAdmin} unreadCount={unreadCount} />
+      <TabBar
+        userId={user.id}
+        isAdmin={isAdmin}
+        unreadCount={unreadCount}
+        unreadMessageCount={unreadMessageCount}
+      />
     </div>
   );
 }

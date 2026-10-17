@@ -1,12 +1,13 @@
 import type { BusinessManagerView, BusinessView } from "@plumas/auth";
 import { Button, Card, CardContent, CardHeader, CardTitle, Textarea } from "@plumas/ui";
-import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound, useNavigate } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { Store } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { PostCard } from "../../../components/post-card";
 import { ReportToggle } from "../../../components/report-toggle";
+import { startGroupConversation } from "../../../lib/dm-client";
 import { mediaUrl, uploadImage } from "../../../lib/upload-image";
 import {
   addManagerFn,
@@ -18,6 +19,7 @@ import {
   searchAddableManagersFn,
   updateBusinessFn,
 } from "../../../server/functions/business";
+import { getBusinessMessagingTargetFn } from "../../../server/functions/dm";
 
 export const Route = createFileRoute("/_app/businesses/$slug")({
   loader: async ({ params }) => {
@@ -51,12 +53,14 @@ function BusinessDetail() {
   const { user } = Route.useRouteContext();
   const { slug } = Route.useParams();
   const initial = Route.useLoaderData();
+  const navigate = useNavigate();
 
   const doGetBusinessPosts = useServerFn(getBusinessPostsFn);
   const doCreateBusinessPost = useServerFn(createBusinessPostFn);
   const doSearchAddable = useServerFn(searchAddableManagersFn);
   const doAddManager = useServerFn(addManagerFn);
   const doUpdateBusiness = useServerFn(updateBusinessFn);
+  const doGetMessagingTarget = useServerFn(getBusinessMessagingTargetFn);
 
   const [business, setBusiness] = useState(initial.business);
   const [managers, setManagers] = useState(initial.managers);
@@ -68,10 +72,36 @@ function BusinessDetail() {
   const [uploadingGallery, setUploadingGallery] = useState(false);
   const [galleryPick, setGalleryPick] = useState<File | null>(null);
   const [galleryAltText, setGalleryAltText] = useState("");
+  const [messaging, setMessaging] = useState(false);
+  const [messagingError, setMessagingError] = useState<string | null>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const isManager = business.myRole !== null;
   const isOwner = business.myRole === "owner";
+
+  /** FR-DM-15: message this business's managers, reusing an existing thread if there is one. */
+  async function handleMessageBusiness() {
+    setMessaging(true);
+    setMessagingError(null);
+    try {
+      const target = await doGetMessagingTarget({ data: { businessId: business.id } });
+      const conversationId =
+        target.existingConversationId ??
+        (await startGroupConversation(
+          user.id,
+          business.name,
+          target.managers.map((manager) => manager.userId),
+          business.id,
+        ));
+      await navigate({ to: "/messages/$conversationId", params: { conversationId } });
+    } catch (messageError) {
+      setMessagingError(
+        messageError instanceof Error ? messageError.message : "Couldn't message this business.",
+      );
+    } finally {
+      setMessaging(false);
+    }
+  }
 
   async function refreshBusiness() {
     const fresh = await getBusinessBySlugFn({ data: { slug } });
@@ -138,8 +168,20 @@ function BusinessDetail() {
             Add manager
           </Button>
         ) : null}
+        {!isManager ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            disabled={messaging}
+            onClick={() => void handleMessageBusiness()}
+          >
+            {messaging ? "Opening..." : "Message this business"}
+          </Button>
+        ) : null}
         {!isManager ? <ReportToggle targetType="business" targetId={business.id} /> : null}
       </div>
+      {messagingError ? <p className="text-sm text-destructive">{messagingError}</p> : null}
 
       {isOwner && showAddManager ? (
         <AddManagerPanel
