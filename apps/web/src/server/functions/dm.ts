@@ -8,6 +8,7 @@ import {
   findBusinessConversationForUser,
   getBackup,
   getConversationSummary,
+  getReadReceiptsEnabled,
   hideConversationForUser,
   listConversationSummariesForUser,
   listDevicesForUser,
@@ -15,6 +16,8 @@ import {
   listManagers,
   listMessages,
   listPendingDepartures,
+  listReadReceipts,
+  listTypingUsers,
   markConversationRead,
   publishKeyPackages,
   recordDeviceLinkOperations,
@@ -23,12 +26,15 @@ import {
   requestToLeaveGroup,
   searchMembers,
   sendMessage,
+  setReadReceiptsEnabled,
+  setTyping,
   unsendMessage,
   upsertBackup,
 } from "@plumas/auth";
 import {
   addDeviceToConversationsSchema,
   addGroupMemberSchema,
+  conversationIdSchema,
   createBackupSchema,
   listMessagesSchema,
   markConversationReadSchema,
@@ -37,6 +43,7 @@ import {
   removeGroupMemberSchema,
   searchMembersSchema,
   sendMessageSchema,
+  setReadReceiptsEnabledSchema,
   startDirectConversationSchema,
   startGroupConversationSchema,
 } from "@plumas/validators";
@@ -327,4 +334,42 @@ export const getGroupMembersFn = createServerFn({ method: "GET" })
   .handler(async ({ data }) => {
     const user = await requireUser();
     return listGroupMembers(getDb(), data.conversationId, user.id);
+  });
+
+/** FR-DM-13: marks the caller as currently typing in this conversation. */
+export const setTypingFn = createServerFn({ method: "POST" })
+  .validator(conversationIdSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    await setTyping(getDb(), data.conversationId, user.id);
+    return { ok: true as const };
+  });
+
+/** FR-DM-13: other active participants currently typing in this conversation. */
+export const getTypingUsersFn = createServerFn({ method: "GET" })
+  .validator(conversationIdSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    return listTypingUsers(getDb(), data.conversationId, user.id);
+  });
+
+/** FR-DM-13: other active participants' read cursors, for "Read"/"Read by all" indicators. */
+export const getReadReceiptsFn = createServerFn({ method: "GET" })
+  .validator(conversationIdSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    return listReadReceipts(getDb(), data.conversationId, user.id);
+  });
+
+export const getReadReceiptsEnabledFn = createServerFn({ method: "GET" }).handler(async () => {
+  const user = await requireUser();
+  return getReadReceiptsEnabled(getDb(), user.id);
+});
+
+export const setReadReceiptsEnabledFn = createServerFn({ method: "POST" })
+  .validator(setReadReceiptsEnabledSchema)
+  .handler(async ({ data }) => {
+    const user = await requireUser();
+    await setReadReceiptsEnabled(getDb(), user.id, data.enabled);
+    return { ok: true as const };
   });

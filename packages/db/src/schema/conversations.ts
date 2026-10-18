@@ -66,3 +66,23 @@ export const conversationParticipants = pgTable(
   },
   (t) => [primaryKey({ columns: [t.conversationId, t.userId] })],
 );
+
+/**
+ * FR-DM-13: ephemeral typing presence - plaintext (not E2EE, it isn't message content) and never
+ * durable history. One row per (conversation, user), upserted on every keystroke tick and read
+ * back with a recency filter (see dm-service.ts's TYPING_TTL_SECONDS) - a stale row is simply
+ * ignored by every reader, so there's no cleanup job to write.
+ */
+export const typingIndicators = pgTable(
+  "typing_indicators",
+  {
+    conversationId: uuid("conversation_id")
+      .notNull()
+      .references(() => conversations.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [primaryKey({ columns: [t.conversationId, t.userId] })],
+);

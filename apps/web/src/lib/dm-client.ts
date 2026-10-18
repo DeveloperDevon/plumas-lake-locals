@@ -14,6 +14,9 @@ import {
   getMessagesFn,
   getMyConversationsFn,
   getPendingDeparturesFn,
+  getReadReceiptsEnabledFn,
+  getReadReceiptsFn,
+  getTypingUsersFn,
   hideConversationFn,
   markConversationReadFn,
   publishKeyPackagesFn,
@@ -23,6 +26,8 @@ import {
   requestToLeaveGroupFn,
   searchMembersFn,
   sendMessageFn,
+  setReadReceiptsEnabledFn,
+  setTypingFn,
   startDirectConversationFn,
   startGroupConversationFn,
   unsendMessageFn,
@@ -246,6 +251,41 @@ export async function unsendMessage(messageId: string): Promise<void> {
 /** FR-DM-16: deletes the conversation from this user's own inbox only. */
 export async function hideConversation(conversationId: string): Promise<void> {
   await hideConversationFn({ data: { conversationId } });
+}
+
+/** FR-DM-13: marks the caller as currently typing - no crypto involved, plaintext presence only. */
+export async function setTyping(conversationId: string): Promise<void> {
+  await setTypingFn({ data: { conversationId } });
+}
+
+export interface TypingUser {
+  userId: string;
+  displayName: string;
+}
+
+/** FR-DM-13: other active participants currently typing in this conversation. */
+export async function getTypingUsers(conversationId: string): Promise<TypingUser[]> {
+  return getTypingUsersFn({ data: { conversationId } });
+}
+
+export interface ReadReceipt {
+  userId: string;
+  lastReadMessageId: string | null;
+}
+
+/** FR-DM-13: other active participants' read cursors, for "Read"/"Read by all" indicators. */
+export async function getReadReceipts(conversationId: string): Promise<ReadReceipt[]> {
+  return getReadReceiptsFn({ data: { conversationId } });
+}
+
+/** FR-DM-13: whether this member currently shows a "Read" receipt to others. */
+export async function getReadReceiptsEnabled(): Promise<boolean> {
+  return getReadReceiptsEnabledFn();
+}
+
+/** FR-DM-13: "member can turn read receipts off" - doesn't affect their own unread tracking. */
+export async function setReadReceiptsEnabled(enabled: boolean): Promise<void> {
+  await setReadReceiptsEnabledFn({ data: { enabled } });
 }
 
 export interface ExportedConversation {

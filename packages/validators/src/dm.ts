@@ -116,3 +116,11 @@ export const markConversationReadSchema = z.object({
   messageId: uuidSchema,
 });
 export type MarkConversationReadInput = z.infer<typeof markConversationReadSchema>;
+
+/** FR-DM-13: the only input setTyping/getTypingUsers/getReadReceipts need. */
+export const conversationIdSchema = z.object({ conversationId: uuidSchema });
+export type ConversationIdInput = z.infer<typeof conversationIdSchema>;
+
+/** FR-DM-13: member can turn read receipts off. */
+export const setReadReceiptsEnabledSchema = z.object({ enabled: z.boolean() });
+export type SetReadReceiptsEnabledInput = z.infer<typeof setReadReceiptsEnabledSchema>;

@@ -7,18 +7,22 @@ import { useEffect, useRef, useState } from "react";
 
 import {
   ensureMessagingSetup,
+  getReadReceiptsEnabled,
   linkNewDevice,
   prepareDeviceLinkQrPayload,
   refreshBackup,
   restoreFromRecoveryKey,
+  setReadReceiptsEnabled,
 } from "../../../lib/dm-client";
 
 export const Route = createFileRoute("/_app/settings/messaging")({
+  loader: async () => ({ readReceiptsEnabled: await getReadReceiptsEnabled() }),
   component: MessagingSettings,
 });
 
 function MessagingSettings() {
   const { user } = Route.useRouteContext();
+  const { readReceiptsEnabled: initialReadReceiptsEnabled } = Route.useLoaderData();
   const [deviceId, setDeviceId] = useState<string | null | undefined>(undefined);
   const [recoveryKey, setRecoveryKey] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -91,9 +95,58 @@ function MessagingSettings() {
         </CardContent>
       </Card>
 
+      <ReadReceipts initialEnabled={initialReadReceiptsEnabled} />
+
       {deviceId ? <BackUpNow /> : null}
       {deviceId ? <DeviceLinking userId={user.id} /> : null}
     </div>
+  );
+}
+
+/** FR-DM-13: "member can turn read receipts off" - doesn't affect their own unread tracking. */
+function ReadReceipts({ initialEnabled }: { initialEnabled: boolean }) {
+  const [enabled, setEnabled] = useState(initialEnabled);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function toggle() {
+    const next = !enabled;
+    setEnabled(next);
+    setSaving(true);
+    setError(null);
+    try {
+      await setReadReceiptsEnabled(next);
+    } catch (toggleError) {
+      setEnabled(!next);
+      setError(toggleError instanceof Error ? toggleError.message : "Couldn't save that change.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Read receipts</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3 text-sm">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-muted-foreground">
+            Let other members see when you&apos;ve read their messages.
+          </p>
+          <Button
+            type="button"
+            size="sm"
+            variant={enabled ? "default" : "outline"}
+            disabled={saving}
+            onClick={() => void toggle()}
+          >
+            {enabled ? "On" : "Off"}
+          </Button>
+        </div>
+        {error ? <p className="text-destructive">{error}</p> : null}
+      </CardContent>
+    </Card>
   );
 }
 

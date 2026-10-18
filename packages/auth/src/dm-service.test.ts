@@ -13,20 +13,25 @@ import {
   DmSelfConversationError,
   DmUnsendWindowExpiredError,
   getBackup,
+  getReadReceiptsEnabled,
   hideConversationForUser,
   listConversationsForUser,
   listDevicesForUser,
   listMessages,
+  listReadReceipts,
+  listTypingUsers,
   markConversationRead,
   publishKeyPackages,
   registerDevice,
   searchMembers,
   sendMessage,
+  setReadReceiptsEnabled,
+  setTyping,
   unsendMessage,
   upsertBackup,
 } from "./dm-service";
 
-const { messages, users } = schema;
+const { messages, typingIndicators, users } = schema;
 
 function mustGetEnv(name: string): string {
   const value = process.env[name];
@@ -523,5 +528,94 @@ describe("dm-service (integration, against the real local Postgres)", () => {
     await markConversationRead(db, conversation.id, bob.id, firstMessage.id);
     const unreadStillOne = await countUnreadForUser(db, bob.id);
     expect(unreadStillOne.byConversation[conversation.id]).toBe(1);
+  });
+
+  it("shows a typing indicator to other participants, expires it, and clears it on send (FR-DM-13)", async () => {
+    const alice = await makeMember("alice-typing");
+    const bob = await makeMember("bob-typing");
+    const aliceDevice = await makeDeviceWithKeyPackage(alice.id);
+
+    const conversation = await createDirectConversation(db, {
+      conversationId: crypto.randomUUID(),
+      requesterId: alice.id,
+      requesterDeviceId: aliceDevice.id,
+      otherUserId: bob.id,
+      epoch: 1,
+      welcomeBytes: Buffer.from("welcome"),
+    });
+
+    await setTyping(db, conversation.id, alice.id);
+    expect((await listTypingUsers(db, conversation.id, bob.id)).map((u) => u.userId)).toEqual([
+      alice.id,
+    ]);
+    // Never shown to the typer themselves.
+    expect(await listTypingUsers(db, conversation.id, alice.id)).toEqual([]);
+
+    // A row older than the TTL is treated as stale.
+    await db
+      .update(typingIndicators)
+      .set({ updatedAt: new Date(Date.now() - 7000) })
+      .where(eq(typingIndicators.conversationId, conversation.id));
+    expect(await listTypingUsers(db, conversation.id, bob.id)).toEqual([]);
+
+    // Sending clears it immediately, without waiting for the TTL to expire.
+    await setTyping(db, conversation.id, alice.id);
+    await sendMessage(db, {
+      conversationId: conversation.id,
+      senderUserId: alice.id,
+      senderDeviceId: aliceDevice.id,
+      epoch: 1,
+      ciphertext: Buffer.from("hi"),
+    });
+    expect(await listTypingUsers(db, conversation.id, bob.id)).toEqual([]);
+  });
+
+  it("reflects the read cursor as a receipt, honoring the opt-out, without affecting unread tracking (FR-DM-13)", async () => {
+    const alice = await makeMember("alice-receipts");
+    const bob = await makeMember("bob-receipts");
+    const aliceDevice = await makeDeviceWithKeyPackage(alice.id);
+
+    const conversation = await createDirectConversation(db, {
+      conversationId: crypto.randomUUID(),
+      requesterId: alice.id,
+      requesterDeviceId: aliceDevice.id,
+      otherUserId: bob.id,
+      epoch: 1,
+      welcomeBytes: Buffer.from("welcome"),
+    });
+    const sent = await sendMessage(db, {
+      conversationId: conversation.id,
+      senderUserId: alice.id,
+      senderDeviceId: aliceDevice.id,
+      epoch: 1,
+      ciphertext: Buffer.from("hi"),
+    });
+
+    expect(await listReadReceipts(db, conversation.id, alice.id)).toEqual([
+      { userId: bob.id, lastReadMessageId: null },
+    ]);
+
+    await markConversationRead(db, conversation.id, bob.id, sent.id);
+    expect(await listReadReceipts(db, conversation.id, alice.id)).toEqual([
+      { userId: bob.id, lastReadMessageId: sent.id },
+    ]);
+
+    // Bob opts out: alice no longer sees any trace of his read cursor, but his own unread
+    // tracking (FR-DM-04) keeps working regardless - the opt-out only hides the receipt from
+    // others, it doesn't touch lastReadMessageId itself.
+    await setReadReceiptsEnabled(db, bob.id, false);
+    expect(await listReadReceipts(db, conversation.id, alice.id)).toEqual([]);
+    expect((await countUnreadForUser(db, bob.id)).byConversation[conversation.id] ?? 0).toBe(0);
+  });
+
+  it("getReadReceiptsEnabled/setReadReceiptsEnabled round-trip, defaulting to on (FR-DM-13)", async () => {
+    const member = await makeMember("read-receipt-toggle");
+    expect(await getReadReceiptsEnabled(db, member.id)).toBe(true);
+
+    await setReadReceiptsEnabled(db, member.id, false);
+    expect(await getReadReceiptsEnabled(db, member.id)).toBe(false);
+
+    await setReadReceiptsEnabled(db, member.id, true);
+    expect(await getReadReceiptsEnabled(db, member.id)).toBe(true);
   });
 });

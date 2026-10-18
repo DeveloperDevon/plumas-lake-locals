@@ -12,8 +12,11 @@ const {
   dmBackups,
   keyPackages,
   messages,
+  typingIndicators,
   users,
 } = schema;
+
+const TYPING_TTL_SECONDS = 6;
 
 export class DmNotFoundError extends Error {
   constructor(message = "That conversation no longer exists.") {
@@ -707,6 +710,10 @@ export async function sendMessage(database: Database, input: SendMessageInput) {
       ),
     );
 
+  // FR-DM-13: sending clears this device's own typing state immediately, rather than waiting
+  // for TYPING_TTL_SECONDS to expire it.
+  await clearTyping(database, input.conversationId, input.senderUserId);
+
   await notifyOtherParticipants(database, input.conversationId, input.senderUserId, "dm_message");
 
   return row;
@@ -1094,6 +1101,117 @@ export async function countUnreadForUser(
     total += count;
   }
   return { total, byConversation };
+}
+
+/** FR-DM-13: marks the caller as currently typing - a plaintext presence row, not message content. */
+export async function setTyping(database: Database, conversationId: string, userId: string) {
+  await requireActiveParticipant(database, conversationId, userId);
+  await database
+    .insert(typingIndicators)
+    .values({ conversationId, userId })
+    .onConflictDoUpdate({
+      target: [typingIndicators.conversationId, typingIndicators.userId],
+      set: { updatedAt: new Date() },
+    });
+}
+
+/** Called right after a successful send so "typing" doesn't linger once the message lands. */
+export async function clearTyping(database: Database, conversationId: string, userId: string) {
+  await database
+    .delete(typingIndicators)
+    .where(
+      and(eq(typingIndicators.conversationId, conversationId), eq(typingIndicators.userId, userId)),
+    );
+}
+
+export interface TypingUser {
+  userId: string;
+  displayName: string;
+}
+
+/**
+ * FR-DM-13: other active participants currently typing, i.e. whose row was touched within the
+ * last TYPING_TTL_SECONDS. A row older than that is simply treated as stale - there's no cleanup
+ * job, since every reader filters by recency the same way.
+ */
+export async function listTypingUsers(
+  database: Database,
+  conversationId: string,
+  userId: string,
+): Promise<TypingUser[]> {
+  await requireActiveParticipant(database, conversationId, userId);
+  return database
+    .select({ userId: users.id, displayName: users.displayName })
+    .from(typingIndicators)
+    .innerJoin(
+      conversationParticipants,
+      and(
+        eq(conversationParticipants.conversationId, typingIndicators.conversationId),
+        eq(conversationParticipants.userId, typingIndicators.userId),
+      ),
+    )
+    .innerJoin(users, eq(users.id, typingIndicators.userId))
+    .where(
+      and(
+        eq(typingIndicators.conversationId, conversationId),
+        ne(typingIndicators.userId, userId),
+        eq(conversationParticipants.status, "active"),
+        sql`${typingIndicators.updatedAt} > now() - (${TYPING_TTL_SECONDS} * interval '1 second')`,
+      ),
+    );
+}
+
+/**
+ * FR-DM-13: per-user opt-out from exposing a "Read" receipt to others. Doesn't affect this
+ * user's own unread-count tracking (FR-DM-04), which keeps using lastReadMessageId regardless.
+ */
+export async function getReadReceiptsEnabled(database: Database, userId: string): Promise<boolean> {
+  const [row] = await database
+    .select({ readReceiptsEnabled: users.readReceiptsEnabled })
+    .from(users)
+    .where(eq(users.id, userId));
+  return row?.readReceiptsEnabled ?? true;
+}
+
+export async function setReadReceiptsEnabled(
+  database: Database,
+  userId: string,
+  enabled: boolean,
+): Promise<void> {
+  await database.update(users).set({ readReceiptsEnabled: enabled }).where(eq(users.id, userId));
+}
+
+export interface ReadReceipt {
+  userId: string;
+  lastReadMessageId: string | null;
+}
+
+/**
+ * FR-DM-13: other active participants' read cursors, for rendering "Read"/"Read by all" on the
+ * sender's own messages. A participant with readReceiptsEnabled = false is simply omitted, not
+ * returned with a flag - the sender never sees any trace of them here.
+ */
+export async function listReadReceipts(
+  database: Database,
+  conversationId: string,
+  userId: string,
+): Promise<ReadReceipt[]> {
+  await requireActiveParticipant(database, conversationId, userId);
+  return database
+    .select({
+      userId: conversationParticipants.userId,
+      lastReadMessageId: conversationParticipants.lastReadMessageId,
+    })
+    .from(conversationParticipants)
+    .innerJoin(users, eq(users.id, conversationParticipants.userId))
+    .where(
+      and(
+        eq(conversationParticipants.conversationId, conversationId),
+        ne(conversationParticipants.userId, userId),
+        eq(conversationParticipants.status, "active"),
+        eq(users.readReceiptsEnabled, true),
+      ),
+    );
 }
 
 export interface RecordDeviceLinkOperation {

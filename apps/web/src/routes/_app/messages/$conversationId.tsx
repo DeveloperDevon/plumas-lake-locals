@@ -8,11 +8,16 @@ import {
   type DecryptedMessage,
   decryptMessages,
   finalizePendingDepartures,
+  getReadReceipts,
+  getTypingUsers,
   leaveGroup,
   markConversationRead,
+  type ReadReceipt,
   removeMemberFromGroup,
   searchMembers,
   sendDmMessage,
+  setTyping,
+  type TypingUser,
   unsendMessage,
 } from "../../../lib/dm-client";
 import { formatDateTime } from "../../../lib/format-date";
@@ -25,6 +30,15 @@ import {
 // FR-DM-16: mirrors dm-service.ts's UNSEND_WINDOW_MINUTES - a client-side hint only (the server
 // is the source of truth and rejects a late attempt regardless).
 const UNSEND_WINDOW_MS = 15 * 60 * 1000;
+
+// FR-DM-03: how often an open thread polls for new messages/typing/read receipts. The app
+// deploys to Cloudflare Workers via Nitro (no long-running process to hold a websocket) - a
+// tight poll is the cheap, infra-free way to approximate "real-time while online".
+const POLL_MS = 4000;
+// FR-DM-13: client-side throttle so every keystroke doesn't call setTyping - not a server-
+// enforced rate limit, just UX politeness (typing rows never touch `messages`, so FR-DM-10's
+// budget is untouched either way).
+const TYPING_THROTTLE_MS = 2000;
 
 export const Route = createFileRoute("/_app/messages/$conversationId")({
   loader: async ({ params }) => {
@@ -68,6 +82,11 @@ function ConversationThread() {
   const [memberResults, setMemberResults] = useState<GroupMemberRow[]>([]);
   const [memberBusyId, setMemberBusyId] = useState<string | null>(null);
   const [memberError, setMemberError] = useState<string | null>(null);
+
+  const [typingUsers, setTypingUsers] = useState<TypingUser[]>([]);
+  const [readReceipts, setReadReceipts] = useState<ReadReceipt[]>([]);
+  const pollInFlightRef = useRef(false);
+  const lastTypingSentAtRef = useRef(0);
 
   // FR-DM-04: advances the read cursor past the furthest *fetched* row, not just the furthest
   // visible one - see dm-service.ts's countUnreadForUser doc comment for why that matters.
@@ -163,6 +182,44 @@ function ConversationThread() {
     };
   }, [setUpOnThisDevice, conversationId, rows]);
 
+  // FR-DM-03/FR-DM-13: polls the open thread for new messages, typing, and read receipts. Skips
+  // a tick while the previous one is still in flight or the tab isn't visible, same reasoning as
+  // the 30s nav-badge poll in _app.tsx, just tighter and scoped to this one thread.
+  useEffect(() => {
+    if (!setUpOnThisDevice) return;
+    let cancelled = false;
+    const interval = setInterval(() => {
+      if (pollInFlightRef.current || document.visibilityState !== "visible") return;
+      pollInFlightRef.current = true;
+      void (async () => {
+        const freshRows = await getMessagesFn({ data: { conversationId, limit: 100 } });
+        const decrypted = await decryptMessages(conversationId, freshRows);
+        if (cancelled) return;
+        setMessages(decrypted);
+        const last = freshRows[freshRows.length - 1];
+        if (last) await markConversationRead(conversationId, last.id);
+        const [typing, receipts] = await Promise.all([
+          getTypingUsers(conversationId),
+          getReadReceipts(conversationId),
+        ]);
+        // False positive: the checker can't see that the effect's cleanup (below) reassigns
+        // `cancelled` from a later run/unmount, which is exactly the race this guards against.
+        // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition
+        if (cancelled) return;
+        setTypingUsers(typing);
+        setReadReceipts(receipts);
+      })()
+        .catch(() => undefined) // a transient poll failure just retries on the next tick
+        .finally(() => {
+          pollInFlightRef.current = false;
+        });
+    }, POLL_MS);
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+    };
+  }, [setUpOnThisDevice, conversationId]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [messages]);
@@ -178,6 +235,14 @@ function ConversationThread() {
         </CardContent>
       </Card>
     );
+  }
+
+  function handleDraftChange(value: string) {
+    setDraft(value);
+    const now = Date.now();
+    if (now - lastTypingSentAtRef.current < TYPING_THROTTLE_MS) return;
+    lastTypingSentAtRef.current = now;
+    void setTyping(conversationId).catch(() => undefined);
   }
 
   async function handleSend() {
@@ -238,6 +303,25 @@ function ConversationThread() {
       setLeaving(false);
     }
   }
+
+  // FR-DM-13: read receipt for my own most recent (non-unsent) message only - no per-message,
+  // no per-person breakdown. message.id is a UUIDv7, so plain string comparison against each
+  // participant's lastReadMessageId sorts chronologically, the same trick markConversationRead/
+  // countUnreadForUser already rely on server-side.
+  const myLastMessageId =
+    [...(messages ?? [])].reverse().find((message) => message.mine && !message.unsentAt)?.id ??
+    null;
+  const readLabel =
+    myLastMessageId !== null &&
+    readReceipts.length > 0 &&
+    readReceipts.every(
+      (receipt) =>
+        receipt.lastReadMessageId !== null && receipt.lastReadMessageId >= myLastMessageId,
+    )
+      ? isGroup
+        ? "Read by all"
+        : "Read"
+      : null;
 
   return (
     <div className="flex h-[calc(100vh-3rem)] flex-col gap-3">
@@ -384,6 +468,9 @@ function ConversationThread() {
                           Unsend
                         </button>
                       ) : null}
+                      {message.id === myLastMessageId && readLabel ? (
+                        <span>{readLabel}</span>
+                      ) : null}
                     </span>
                   </div>
                 );
@@ -394,6 +481,13 @@ function ConversationThread() {
       </div>
 
       {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
+      {typingUsers.length > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {typingUsers.map((user) => user.displayName).join(", ")}{" "}
+          {typingUsers.length === 1 ? "is" : "are"} typing...
+        </p>
+      ) : null}
 
       <form
         className="flex gap-2 border-t border-border pt-3"
@@ -409,7 +503,7 @@ function ConversationThread() {
           placeholder="Write a message..."
           className="h-11 flex-1 rounded-md border border-border bg-background px-3 text-sm text-foreground"
           onChange={(event) => {
-            setDraft(event.target.value);
+            handleDraftChange(event.target.value);
           }}
         />
         <Button type="submit" disabled={busy || draft.trim().length === 0}>

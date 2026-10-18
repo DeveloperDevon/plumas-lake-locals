@@ -53,6 +53,10 @@ export const users = pgTable(
     // an explicit `false` for a type turns its email off. Validated by @plumas/validators, not
     // a DB constraint, same reasoning as fieldVisibility right above.
     notificationEmailPreferences: jsonb("notification_email_preferences"),
+    // FR-DM-13: controls whether OTHER participants can see this member's read cursor
+    // (conversationParticipants.lastReadMessageId) as a "Read" receipt. Doesn't affect the
+    // cursor itself - FR-DM-04's own unread-count tracking keeps working regardless.
+    readReceiptsEnabled: boolean("read_receipts_enabled").notNull().default(true),
     // FR-CAL-06: only the hash is stored, exactly like invites.token_hash - the raw token is
     // shown once at generation time and never persisted. null means no feed link issued yet.
     calendarFeedTokenHash: text("calendar_feed_token_hash"),
